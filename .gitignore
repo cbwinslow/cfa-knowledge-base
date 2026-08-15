@@ -1,0 +1,18 @@
+# Virtual Environments
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+
+# Raw downloads & caches (The SQLite DB in data/ stores the processed & indexed knowledge)
+data/downloads/
+data/processed/
+
+# System / Editor files
+.DS_Store
+*.swp
+*.swo
+.vscode/
+.idea/
