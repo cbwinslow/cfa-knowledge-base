@@ -1,0 +1,31 @@
+{
+  "asset_classes": [
+    {
+      "name": "US Large Cap Equities",
+      "target_weight": 0.40,
+      "volatility": 0.16,
+      "transaction_cost": 0.001,
+      "tax_rate": 0.20,
+      "correlation": 0.85,
+      "optimal_corridor": [0.345, 0.455]
+    },
+    {
+      "name": "Emerging Market Equities",
+      "target_weight": 0.15,
+      "volatility": 0.28,
+      "transaction_cost": 0.005,
+      "tax_rate": 0.20,
+      "correlation": 0.40,
+      "optimal_corridor": [0.118, 0.182]
+    },
+    {
+      "name": "Core Fixed Income",
+      "target_weight": 0.35,
+      "volatility": 0.06,
+      "transaction_cost": 0.001,
+      "tax_rate": 0.35,
+      "correlation": 0.20,
+      "optimal_corridor": [0.292, 0.408]
+    }
+  ]
+}
