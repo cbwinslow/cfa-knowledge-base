@@ -1,0 +1,28 @@
+{
+  "client_name": "Dr. Arthur Pendelton & Elena Pendelton",
+  "age": [58, 55],
+  "investable_portfolio": 6500000,
+  "annual_living_expenses": 220000,
+  "expected_inflation": 0.025,
+  "tax_rate": 0.30,
+  "human_capital": {
+    "nature": "bond_like",
+    "annual_income": 450000,
+    "years_to_retirement": 7,
+    "present_value": 2650000
+  },
+  "return_objective": {
+    "nominal_required_after_tax": 0.0588,
+    "nominal_required_pre_tax": 0.0840
+  },
+  "risk_tolerance": {
+    "ability": "Above Average",
+    "willingness": "Above Average",
+    "overall": "Above Average"
+  },
+  "strategic_asset_allocation": {
+    "global_equities": 0.65,
+    "fixed_income": 0.25,
+    "real_estate_alternatives": 0.10
+  }
+}

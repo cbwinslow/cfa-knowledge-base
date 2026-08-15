@@ -1,0 +1,7 @@
+{
+  "skill_name": "example-finance-calculator",
+  "description": "Calculates Black-Scholes option pricing and Greeks on demand.",
+  "scripts": ["calculate_greeks.py"],
+  "examples": ["sample_option_chain.json"],
+  "references": ["black_scholes_formula.md"]
+}
