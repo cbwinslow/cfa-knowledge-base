@@ -77,6 +77,13 @@ from cfa_quant.portfolio_risk import (
     VolatilitySurfaceEngine
 )
 
+# 3b. Backtesting & Execution Simulation
+from cfa_quant.backtester import (
+    WalkForwardBacktester,
+    BacktestReport,
+    BacktestTradeRecord
+)
+
 # 4. Wealth Advisory & Life-Cycle Management
 from cfa_quant.wealth_advisory import (
     LifeCyclePortfolioEngine,
@@ -181,6 +188,10 @@ __all__ = [
     "CampisiFixedIncomeAttributionReport",
     "FixedIncomeLdiEngine",
     "VolatilitySurfaceEngine",
+    # Backtester
+    "WalkForwardBacktester",
+    "BacktestReport",
+    "BacktestTradeRecord",
     # Wealth Advisory
     "LifeCyclePortfolioEngine",
     "LifeCycleClient",
