@@ -41,8 +41,9 @@ from cfa_quant.valuation import (
     ExcelModelExporter
 )
 
-# 3. Portfolio Construction & Macro Risk
+# 3. Portfolio Construction, Asset Allocation & Macro Risk
 from cfa_quant.portfolio_risk import (
+    BlackLittermanEngine,
     ScenarioLabEngine,
     MarginalAllocationEngine,
     PerformanceAttributionEngine,
@@ -122,7 +123,8 @@ __all__ = [
     "CapmSmlModel",
     "IndustryBenchmarkEngine",
     "ExcelModelExporter",
-    # Portfolio Risk & Attribution
+    # Portfolio Risk & Asset Allocation
+    "BlackLittermanEngine",
     "ScenarioLabEngine",
     "MarginalAllocationEngine",
     "PerformanceAttributionEngine",
