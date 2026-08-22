@@ -19,6 +19,7 @@ from cfa_quant import (
     FactorRiskModelEngine, ActiveRiskDecomposition, FactorExposure,
     CoveredCallStrategy, ProtectiveCollarStrategy, BullCallSpreadStrategy, IronCondorStrategy, LongStraddleStrategy, GreeksHedgingSolver,
     BlackLittermanEngine, GipsCompositeEngine, ScenarioLabEngine, MarginalAllocationEngine, PerformanceAttributionEngine, FixedIncomeLdiEngine, VolatilitySurfaceEngine,
+    MarkovRegimeEngine, MertonJumpDiffusionEngine, RegimeState,
     LifeCyclePortfolioEngine, LifeCycleClient, IpsGeneratorEngine, ClientProfile, TaxLegalOptimizationEngine, AccountBalances,
     SecurityMaster, TransactionLedger, CustodianIngestionGateway, NewsWireEngine, CentralDataHopper, MacroEngine, SecEdgarClient, MarketDataClient,
     MemoGeneratorEngine,
@@ -32,6 +33,48 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Institutional Visual Theme & Glassmorphic CSS Styling
+st.markdown("""
+<style>
+    /* Metric Card Styling */
+    div[data-testid="stMetric"] {
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.75) 0%, rgba(15, 23, 42, 0.95) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 14px 18px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+        transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    div[data-testid="stMetric"]:hover {
+        border-color: rgba(59, 130, 246, 0.5);
+        transform: translateY(-2px);
+    }
+    div[data-testid="stMetricLabel"] {
+        font-size: 0.82rem !important;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #94a3b8 !important;
+        font-weight: 600;
+    }
+    div[data-testid="stMetricValue"] {
+        font-size: 1.45rem !important;
+        font-weight: 700 !important;
+        color: #f8fafc !important;
+        font-feature-settings: "tnum" 1;
+    }
+    /* Tab Bar Polish */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 6px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px 8px 0px 0px;
+        padding: 8px 14px;
+        font-size: 0.88rem;
+        font-weight: 500;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # Initialize Copilot Session State
 if "chat_history" not in st.session_state:
@@ -83,10 +126,11 @@ with st.sidebar:
                 st.code(f"{wf['filename']} ({wf['size_bytes']} B)", language="text")
 
 # ==================== MAIN DASHBOARD TABS ====================
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15, tab16 = st.tabs([
     "🏛️ Valuation & SML",
     "📈 Price Action & Zoom",
     "🌐 3D Vol Surface",
+    "🎲 Stochastic Regime Lab",
     "➕ Marginal Asset Addition",
     "🏛️ Muni Bonds & TEY",
     "📊 CIPM Attribution",
@@ -399,8 +443,100 @@ if has_data:
             )
         st.json(sol_h)
 
-# ------------------ TAB 4: MARGINAL ASSET ADDITION & 3D LANDSCAPE ------------------
+# ------------------ TAB 4: STOCHASTIC REGIME & MERTON JUMP DIFFUSION ------------------
 with tab4:
+    st.header("🎲 CFA Stochastic Regime Switching & Merton Jump-Diffusion Lab")
+    st.caption("Models non-linear macro state transitions (Bull vs. Crisis) and Poisson jump-diffusion for extreme tail-risk VaR/CVaR quantification.")
+    
+    sim_mode = st.radio("Simulation Model", ["1. Markov Regime Switching (Bull / Bear / Crisis)", "2. Merton Poisson Jump Diffusion (Tail Risk & Jumps)"], horizontal=True)
+    
+    col_s1, col_s2 = st.columns(2)
+    
+    if "Markov" in sim_mode:
+        with col_s1:
+            st.subheader("⚙️ Regime State Parameters")
+            r1_drift = st.slider("State 1 (Bull) Expected Return (%)", -10.0, 30.0, 12.0, 1.0) / 100.0
+            r1_vol = st.slider("State 1 (Bull) Volatility (%)", 5.0, 40.0, 14.0, 1.0) / 100.0
+            r2_drift = st.slider("State 2 (Crisis) Expected Return (%)", -50.0, 10.0, -15.0, 1.0) / 100.0
+            r2_vol = st.slider("State 2 (Crisis) Volatility (%)", 15.0, 80.0, 38.0, 1.0) / 100.0
+            
+        with col_s2:
+            st.subheader("🔄 Transition Probability Matrix")
+            p11 = st.slider("P(Bull -> Bull) %", 50.0, 99.0, 95.0, 1.0) / 100.0
+            p22 = st.slider("P(Crisis -> Crisis) %", 50.0, 99.0, 75.0, 1.0) / 100.0
+            p12 = 1.0 - p11
+            p21 = 1.0 - p22
+            
+            P_mat = np.array([[p11, p12], [p21, p22]])
+            
+            r_bull = RegimeState(0, "Bull Expansion", r1_drift, r1_vol)
+            r_crisis = RegimeState(1, "Liquidity Crisis", r2_drift, r2_vol)
+            
+            markov_sim = MarkovRegimeEngine(initial_spot=mkt_data.get("current_price", 100.0), regimes=[r_bull, r_crisis], transition_matrix=P_mat)
+            pi_eq = markov_sim.compute_stationary_distribution()
+            
+            st.info(f"**Stationary Ergodic Probabilities:** Bull: **{pi_eq[0]*100:.1f}%** | Crisis: **{pi_eq[1]*100:.1f}%**")
+            
+        res_sim = markov_sim.simulate_paths(num_paths=300, time_horizon_years=1.0, seed=42)
+    else:
+        with col_s1:
+            st.subheader("⚙️ Brownian Diffusion Parameters")
+            m_drift = st.slider("Continuous Drift (mu %)", -10.0, 30.0, 9.0, 1.0) / 100.0
+            m_vol = st.slider("Continuous Volatility (sigma %)", 5.0, 50.0, 16.0, 1.0) / 100.0
+            
+        with col_s2:
+            st.subheader("⚡ Poisson Jump Process Parameters")
+            j_lambda = st.slider("Jump Frequency (Jumps/Year)", 0.0, 10.0, 2.5, 0.5)
+            j_mean = st.slider("Mean Jump Size (%)", -40.0, 10.0, -8.0, 1.0) / 100.0
+            j_vol = st.slider("Jump Dispersion (%)", 1.0, 30.0, 12.0, 1.0) / 100.0
+            
+            merton_sim = MertonJumpDiffusionEngine(
+                initial_spot=mkt_data.get("current_price", 100.0),
+                annual_drift=m_drift,
+                annual_volatility=m_vol,
+                jump_intensity=j_lambda,
+                jump_mean_log=j_mean,
+                jump_vol_log=j_vol
+            )
+            res_sim = merton_sim.simulate_paths(num_paths=300, time_horizon_years=1.0, seed=42)
+            
+    # Risk Metrics Display
+    st.markdown("---")
+    sm1, sm2, sm3, sm4, sm5 = st.columns(5)
+    sm1.metric("Expected Price", f"${res_sim.expected_terminal_price:,.2f}")
+    sm2.metric("95% Terminal VaR", f"{res_sim.terminal_var_95_pct:+.2f}%")
+    sm3.metric("99% Terminal VaR", f"{res_sim.terminal_var_99_pct:+.2f}%")
+    sm4.metric("95% Expected Shortfall", f"{res_sim.terminal_cvar_95_pct:+.2f}%")
+    sm5.metric("Empirical Kurtosis", f"{res_sim.empirical_kurtosis:.2f}", "Fat Tails" if res_sim.empirical_kurtosis > 3.2 else "Normal")
+    
+    # Plotly Multi-Path Fan Chart
+    fig_sim = go.Figure()
+    for p_idx in range(min(50, res_sim.num_paths)):
+        fig_sim.add_trace(go.Scatter(
+            x=res_sim.time_axis,
+            y=res_sim.paths_matrix[p_idx, :],
+            mode='lines',
+            line=dict(width=1, color='rgba(59, 130, 246, 0.25)'),
+            showlegend=False
+        ))
+    median_path = np.median(res_sim.paths_matrix, axis=0)
+    fig_sim.add_trace(go.Scatter(
+        x=res_sim.time_axis,
+        y=median_path,
+        mode='lines',
+        name='Median Trajectory',
+        line=dict(color='#38BDF8', width=3)
+    ))
+    fig_sim.update_layout(
+        title=f"Monte Carlo Simulated Paths ({res_sim.model_name}) | Initial Spot: ${res_sim.initial_spot:,.2f}",
+        xaxis_title="Time Horizon (Years)",
+        yaxis_title="Asset Price ($)",
+        template="plotly_dark"
+    )
+    st.plotly_chart(fig_sim, use_container_width=True)
+
+# ------------------ TAB 5: MARGINAL ASSET ADDITION & 3D LANDSCAPE ------------------
+with tab5:
     st.header("➕ Marginal Asset Addition & 3D Risk-Return Landscape")
     st.caption("Simulates the before-and-after impact of adding an investment to a portfolio across return, volatility, Sharpe ratio, and MCTR risk contributions.")
     
@@ -450,8 +586,8 @@ with tab4:
         with v_c2:
             st.plotly_chart(f_donut, use_container_width=True)
 
-# ------------------ TAB 5: MUNICIPAL BONDS & TAX-EQUIVALENT YIELD (TEY) ------------------
-with tab5:
+# ------------------ TAB 6: MUNICIPAL BONDS & TAX-EQUIVALENT YIELD (TEY) ------------------
+with tab6:
     st.header("🏛️ Institutional Municipal Bond & Tax-Equivalent Yield (TEY) Studio")
     st.caption("Evaluates municipal bond tax-alpha, Muni/Treasury yield ratios, and Key Rate Duration (KRD) curves.")
     
@@ -494,8 +630,8 @@ with tab5:
     df_krd = pd.DataFrame([{"Tenor": k.replace("KRD_", ""), "Key Rate Duration (Years)": v} for k, v in krd_dict.items()])
     st.dataframe(df_krd, use_container_width=True)
 
-# ------------------ TAB 6: CFA / CIPM PERFORMANCE ATTRIBUTION ------------------
-with tab6:
+# ------------------ TAB 7: CFA / CIPM PERFORMANCE ATTRIBUTION ------------------
+with tab7:
     st.header("📊 CFA Level III & CIPM Institutional Performance Attribution")
     st.caption("Decomposes portfolio excess returns using Brinson-Fachler Equity Attribution and Campisi Fixed Income Attribution.")
     
@@ -599,8 +735,8 @@ with tab6:
                 "fundamental_law_metrics": factor_decomp.flam_metrics
             })
 
-# ------------------ TAB 7: SCENARIO LAB & PORTFOLIO COMPARE ------------------
-with tab7:
+# ------------------ TAB 8: SCENARIO LAB & PORTFOLIO COMPARE ------------------
+with tab8:
     st.header("🧪 CFA Multi-Portfolio Comparison & Macroeconomic Stress Lab")
     st.caption("Head-to-head comparison of Current vs. Proposed Portfolios and simulation of historical macro shocks.")
     
@@ -752,8 +888,8 @@ with tab7:
     fig_eq.update_layout(title="Walk-Forward Portfolio Equity Curve ($10M Initial Capital)", xaxis_title="Trading Days", yaxis_title="Portfolio Market Value ($)", template="plotly_dark")
     st.plotly_chart(fig_eq, use_container_width=True)
 
-# ------------------ TAB 8: FIXED INCOME LDI & IMMUNIZATION ------------------
-with tab8:
+# ------------------ TAB 9: FIXED INCOME LDI & IMMUNIZATION ------------------
+with tab9:
     st.header("🛡️ CFA Level III Fixed Income LDI & Immunization Studio")
     st.caption("Matches portfolio duration, satisfies convexity constraints, and minimizes M^2 structural dispersion.")
     
@@ -811,8 +947,8 @@ with tab8:
             })
         st.table(pd.DataFrame(shock_rows))
 
-    # ------------------ TAB 9: OPPORTUNITY COST & EVA ------------------
-    with tab9:
+    # ------------------ TAB 10: OPPORTUNITY COST & EVA ------------------
+    with tab10:
         st.header("🎯 Opportunity Cost & Capital Allocation Assessment")
         opp_eng = OpportunityCostEngine(risk_free_rate=rf, equity_risk_premium=0.050)
         opp_res = opp_eng.evaluate_opportunity_cost(
@@ -836,8 +972,8 @@ with tab8:
         
         st.markdown(f"### 📋 Allocation Verdict\n> **{opp_res.opportunity_cost_verdict}**")
 
-    # ------------------ TAB 10: PEER COMPS & DUPONT 5-WAY ------------------
-    with tab10:
+    # ------------------ TAB 11: PEER COMPS & DUPONT 5-WAY ------------------
+    with tab11:
         st.header("👥 Competitor Benchmarking & DuPont 5-Way Analysis")
         c1, c2 = st.columns([1, 1])
         with c1:
@@ -859,8 +995,8 @@ with tab8:
                 df_peers = pd.DataFrame(peer_comp["peer_data"])
                 st.dataframe(df_peers, use_container_width=True)
 
-    # ------------------ TAB 11: IPS & LIFE-CYCLE GLIDEPATH (CFA LEVEL III) ------------------
-    with tab11:
+    # ------------------ TAB 12: IPS & LIFE-CYCLE GLIDEPATH (CFA LEVEL III) ------------------
+    with tab12:
         st.header("📝 Institutional Investment Policy Statement (IPS) & Life-Cycle Glidepath")
         st.caption("Constructs an audit-ready, institutional IPS and dynamic age-based asset allocation glidepath.")
         
@@ -934,8 +1070,8 @@ with tab8:
             st.markdown(ips_doc)
             st.download_button("📥 Download Full IPS Document (.md)", ips_doc, file_name=f"IPS_{client_name.replace(' ', '_')}.md", mime="text/markdown")
 
-    # ------------------ TAB 12: TAX & LEGAL WEALTH ALPHA ------------------
-    with tab12:
+    # ------------------ TAB 13: TAX & LEGAL WEALTH ALPHA ------------------
+    with tab13:
         st.header("⚖️ Tax-Alpha Asset Location & Cross-Border Optimization")
         
         tl_col1, tl_col2 = st.columns(2)
@@ -965,8 +1101,8 @@ with tab8:
                 st.metric("Annual Tax Savings", f"${arb_res['annual_tax_arbitrage_savings']:,.2f}/yr")
                 st.metric("10-Year Compounded Wealth Delta", f"${arb_res['10_year_compounded_savings']:,.2f}")
 
-    # ------------------ TAB 13: MACRO & YIELD CURVE ------------------
-    with tab13:
+    # ------------------ TAB 14: MACRO & YIELD CURVE ------------------
+    with tab14:
         st.header("🌐 Macroeconomic & Yield Curve Regime Studio")
         if has_data:
             m_summary = macro_snap["macro_risk_summary"]
@@ -985,8 +1121,8 @@ with tab8:
             fig_yc.update_layout(title=f"Yield Curve Regime: {macro_snap['yield_curve']['regime']}", xaxis_title="Tenor", yaxis_title="Yield (%)", template="plotly_dark")
             st.plotly_chart(fig_yc, use_container_width=True)
 
-    # ------------------ TAB 14: CFA KNOWLEDGE BASE ------------------
-    with tab14:
+    # ------------------ TAB 15: CFA KNOWLEDGE BASE ------------------
+    with tab15:
         st.header("📚 CFA Curriculum & Quantitative Research Search")
         query = st.text_input("Query CFA Knowledge Base (Formulas, LOS, Mock Exams, Research):", value="Municipal Bond Tax Equivalent Yield")
         if query:
@@ -1000,8 +1136,8 @@ with tab8:
             else:
                 st.info("No matching curriculum items found.")
 
-    # ------------------ TAB 15: LIVE NEWS WIRE & MEDIA TERMINAL ------------------
-    with tab15:
+    # ------------------ TAB 16: LIVE NEWS WIRE & MEDIA TERMINAL ------------------
+    with tab16:
         st.header("📰 Institutional Real-Time News Wire & Media Terminal")
         st.caption("Live streaming SEC 8-K filings, Federal Reserve FOMC wires, MarketWatch, CNBC & financial press feeds with automated quality scoring and vector search.")
         
