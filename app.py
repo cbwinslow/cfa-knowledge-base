@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CFA Quantitative Suite - Institutional Equity Research & Portfolio Dashboard
+CFA Quantitative Suite - Institutional Equity Research & Wealth Management Dashboard
 Interactive Web Interface powered by Streamlit & Plotly.
 """
 
@@ -14,6 +14,8 @@ from cfa_quant.opportunity_cost import OpportunityCostEngine
 from cfa_quant.stochastic_sim import MertonJumpDiffusion, MJDParameters
 from cfa_quant.options_engine import OptionsAnalyticsEngine
 from cfa_quant.charting import FinancialChartEngine
+from cfa_quant.ips_generator import IpsGeneratorEngine, ClientProfile
+from cfa_quant.tax_legal_engine import TaxLegalOptimizationEngine, AccountBalances
 from pipeline.sec_edgar_client import SecEdgarClient
 from pipeline.market_data import MarketDataClient
 from pipeline.macro_engine import MacroEngine
@@ -24,28 +26,29 @@ from pipeline.forensic_accounting import ForensicAccountingEngine
 from scripts.query_cfa_kb import search_kb
 
 st.set_page_config(
-    page_title="CFA Quant Suite | Institutional Equity Valuation",
+    page_title="CFA Quant Suite | Institutional Equity & Wealth Management",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 st.sidebar.title("📈 CFA Quant Engine")
-st.sidebar.markdown("Institutional Valuation & Capital Allocation Suite")
+st.sidebar.markdown("Institutional Valuation, SAA & Wealth Management Suite")
 ticker = st.sidebar.text_input("Equity Ticker", value="MSFT").upper()
 growth_stage1 = st.sidebar.slider("Stage 1 Growth Rate (%)", min_value=1.0, max_value=30.0, value=8.0, step=0.5) / 100.0
 
 st.sidebar.markdown("---")
-st.sidebar.caption("Grounded in CFA Level I/II/III Curriculum & Academic Quant Research.")
+st.sidebar.caption("Grounded in CFA Level I/II/III Curriculum Standards.")
 
 # ==================== MAIN DASHBOARD TABS ====================
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "🏛️ Valuation & SML",
     "📈 Price Action & Zoom",
     "🎯 Opportunity Cost & EVA",
     "👥 Peer Comps & DuPont 5-Way",
+    "📝 IPS Generator (L3)",
+    "⚖️ Tax & Legal Wealth Alpha",
     "🌐 Macro & Yield Curve",
-    "🎲 Markov Monte Carlo Sim",
     "📚 CFA Knowledge Base"
 ])
 
@@ -179,7 +182,6 @@ if has_data:
     # ------------------ TAB 4: PEER COMPS & DUPONT 5-WAY ------------------
     with tab4:
         st.header("👥 Competitor Benchmarking & DuPont 5-Way Analysis")
-        
         bench_engine = IndustryBenchmarkEngine()
         ratios = bench_engine.compute_cfa_ratios(latest_stmt)
         
@@ -203,18 +205,88 @@ if has_data:
                 df_peers = pd.DataFrame(peer_comp["peer_data"])
                 st.dataframe(df_peers, use_container_width=True)
 
-    # ------------------ TAB 5: MACRO & YIELD CURVE ------------------
-    with tab5:
-        st.header("🌐 Macroeconomic & Yield Curve Regime Studio")
-        m_summary = macro_snap["macro_risk_summary"]
+# ------------------ TAB 5: IPS GENERATOR (CFA LEVEL III) ------------------
+with tab5:
+    st.header("📝 Institutional Investment Policy Statement (IPS) Generator")
+    st.caption("Constructs an audit-ready, institutional IPS following CFA Level III Private Wealth standards.")
+    
+    with st.form("ips_form"):
+        col_c1, col_c2 = st.columns(2)
+        with col_c1:
+            client_name = st.text_input("Client / Family Names", value="Dr. & Mrs. Alexander Wright")
+            client_ages = st.text_input("Client Ages (comma separated)", value="56, 54")
+            jurisdiction = st.selectbox("Residency / Tax Jurisdiction", ["United States (Tax-Exempt State: FL/TX/NV/WY)", "United States (California / High-Tax)", "United States (New York / High-Tax)", "United Kingdom (Non-Dom / Remittance)", "Switzerland (Lump-Sum)", "Puerto Rico (Act 60)"])
+            investable_assets = st.number_input("Total Investable Assets ($)", min_value=100000.0, value=8500000.0, step=250000.0)
+            annual_spending = st.number_input("Annual Living Expenses / Spending ($)", min_value=10000.0, value=280000.0, step=10000.0)
+        with col_c2:
+            human_cap_val = st.number_input("Human Capital Present Value ($)", value=3500000.0, step=100000.0)
+            human_cap_type = st.selectbox("Human Capital Character", ["bond_like (Low Career Volatility)", "equity_like (High Commission / Startup)"])
+            bequest_goal = st.number_input("Bequest / Legacy Target ($)", value=4000000.0, step=250000.0)
+            risk_willing = st.selectbox("Subjective Risk Willingness", ["Above Average", "Moderate", "High", "Below Average"])
+            
+        submit_ips = st.form_submit_button("🚀 Generate Audit-Ready IPS Document")
         
+    if submit_ips:
+        ages_list = [int(a.strip()) for a in client_ages.split(",") if a.strip().isdigit()]
+        profile = ClientProfile(
+            client_names=client_name,
+            ages=ages_list or [55],
+            residence_jurisdiction=jurisdiction,
+            total_investable_assets=investable_assets,
+            annual_spending_needs=annual_spending,
+            human_capital_value=human_cap_val,
+            human_capital_type="bond_like" if "bond_like" in human_cap_type else "equity_like",
+            bequest_legacy_goal=bequest_goal,
+            risk_willingness=risk_willing
+        )
+        ips_eng = IpsGeneratorEngine()
+        ips_doc = ips_eng.generate_full_ips_document(profile)
+        st.success("✓ Investment Policy Statement successfully compiled!")
+        st.markdown(ips_doc)
+        st.download_button("📥 Download IPS Document (.md)", ips_doc, file_name=f"IPS_{client_name.replace(' ', '_')}.md", mime="text/markdown")
+
+# ------------------ TAB 6: TAX & LEGAL WEALTH ALPHA ------------------
+with tab6:
+    st.header("⚖️ Tax-Alpha Asset Location & Cross-Border Optimization")
+    
+    tl_col1, tl_col2 = st.columns(2)
+    with tl_col1:
+        st.subheader("🏛️ Asset Location Optimizer")
+        st.caption("Places assets into Taxable vs. Traditional 401k vs. Roth accounts to minimize tax drag.")
+        taxable_bal = st.number_input("Taxable Brokerage Balance ($)", value=4500000.0, step=100000.0)
+        trad_bal = st.number_input("Tax-Deferred (Traditional 401k/IRA) Balance ($)", value=2500000.0, step=100000.0)
+        roth_bal = st.number_input("Tax-Exempt (Roth IRA/401k) Balance ($)", value=1500000.0, step=100000.0)
+        
+        if st.button("Compute Tax-Alpha Asset Placement"):
+            tl_eng = TaxLegalOptimizationEngine()
+            loc_res = tl_eng.optimize_asset_location(AccountBalances(taxable_bal, trad_bal, roth_bal))
+            st.metric("Estimated Annual Tax Drag Savings", f"${loc_res['estimated_annual_tax_savings_usd']:,.2f}", f"+{loc_res['tax_alpha_basis_points']} bps/yr Tax Alpha")
+            st.json(loc_res["asset_placement"])
+            
+    with tl_col2:
+        st.subheader("🌐 State & Relocation Tax Arbitrage")
+        curr_st = st.selectbox("Current Residency State", ["California", "New York", "New Jersey", "Massachusetts"])
+        prop_st = st.selectbox("Proposed Relocation State", ["Florida", "Texas", "Nevada", "Wyoming", "Puerto Rico (Act 60)"])
+        inc_val = st.number_input("Annual Ordinary Income ($)", value=750000.0, step=50000.0)
+        cg_val = st.number_input("Annual Capital Gains Realized ($)", value=500000.0, step=50000.0)
+        
+        if st.button("Evaluate Jurisdiction Arbitrage"):
+            tl_eng = TaxLegalOptimizationEngine()
+            arb_res = tl_eng.evaluate_jurisdiction_tax_arbitrage(curr_st, prop_st, inc_val, cg_val)
+            st.metric("Annual Tax Savings", f"${arb_res['annual_tax_arbitrage_savings']:,.2f}/yr")
+            st.metric("10-Year Compounded Wealth Delta", f"${arb_res['10_year_compounded_savings']:,.2f}")
+
+# ------------------ TAB 7: MACRO & YIELD CURVE ------------------
+with tab7:
+    st.header("🌐 Macroeconomic & Yield Curve Regime Studio")
+    if has_data:
+        m_summary = macro_snap["macro_risk_summary"]
         mc1, mc2, mc3, mc4 = st.columns(4)
         mc1.metric("10Y Treasury Yield", m_summary["risk_free_rate_10y"])
         mc2.metric("SOFR Benchmark Rate", m_summary["sofr_benchmark"])
         mc3.metric("10Y Breakeven Inflation", m_summary["inflation_expectation_10y"])
         mc4.metric("HY Credit Spread", m_summary["credit_spread_hy_bps"])
         
-        st.subheader("📉 US Treasury Yield Curve Structure")
         yc = macro_snap["yield_curve"]["yields"]
         tenors = list(yc.keys())
         rates = [yc[k] * 100 for k in tenors]
@@ -224,33 +296,8 @@ if has_data:
         fig_yc.update_layout(title=f"Yield Curve Regime: {macro_snap['yield_curve']['regime']}", xaxis_title="Tenor", yaxis_title="Yield (%)", template="plotly_dark")
         st.plotly_chart(fig_yc, use_container_width=True)
 
-    # ------------------ TAB 6: MARKOV MONTE CARLO SIMULATOR ------------------
-    with tab6:
-        st.header("🎲 Markov Regime-Switching Monte Carlo 10,000-Path Simulator")
-        sim_years = st.slider("Simulation Horizon (Years)", 1, 5, 3)
-        
-        mjd_params = MJDParameters(drift=0.10, volatility=mkt_data["beta"]*0.18, jump_intensity=0.3, jump_mean=-0.05, jump_std=0.08)
-        sim = MertonJumpDiffusion(mjd_params)
-        sim_res = sim.simulate(s0=mkt_data["current_price"], t_years=sim_years, n_steps=sim_years*12, n_sims=1000, random_state=42)
-        
-        sc1, sc2, sc3 = st.columns(3)
-        sc1.metric("Expected Terminal Price", f"${sim_res.mean_path[-1]:,.2f}")
-        sc2.metric("95% Value at Risk (VaR)", f"{sim_res.var(0.05)*100:.2f}%")
-        sc3.metric("95% Conditional VaR (CVaR)", f"{sim_res.cvar(0.05)*100:.2f}%")
-        
-        fig_mc = go.Figure()
-        for i in range(min(50, len(sim_res.paths))):
-            fig_mc.add_trace(go.Scatter(x=sim_res.time_grid, y=sim_res.paths[i], mode='lines', line=dict(color='rgba(100, 180, 255, 0.1)'), showlegend=False))
-            
-        fig_mc.add_trace(go.Scatter(x=sim_res.time_grid, y=sim_res.mean_path, mode='lines', name='Expected Mean Path', line=dict(color='#FFD700', width=3)))
-        fig_mc.add_trace(go.Scatter(x=sim_res.time_grid, y=sim_res.quantile(0.95), mode='lines', name='95th Percentile', line=dict(color='#00E676', width=2, dash='dash')))
-        fig_mc.add_trace(go.Scatter(x=sim_res.time_grid, y=sim_res.quantile(0.05), mode='lines', name='5th Percentile', line=dict(color='#FF5252', width=2, dash='dash')))
-        
-        fig_mc.update_layout(title=f"Stochastic Price Projections ({ticker})", xaxis_title="Years", yaxis_title="Stock Price ($)", template="plotly_dark")
-        st.plotly_chart(fig_mc, use_container_width=True)
-
-# ------------------ TAB 7: CFA KNOWLEDGE BASE ------------------
-with tab7:
+# ------------------ TAB 8: CFA KNOWLEDGE BASE ------------------
+with tab8:
     st.header("📚 CFA Curriculum & Quantitative Research Search")
     query = st.text_input("Query CFA Knowledge Base (Formulas, LOS, Mock Exams, Research):", value="Human Capital Asset Allocation")
     if query:
