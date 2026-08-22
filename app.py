@@ -9,32 +9,15 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 
-from cfa_quant.models import OpportunityCostAssessment, ValuationResult
-from cfa_quant.opportunity_cost import OpportunityCostEngine
-from cfa_quant.stochastic_sim import MertonJumpDiffusion, MJDParameters
-from cfa_quant.options_engine import OptionsAnalyticsEngine
-from cfa_quant.charting import FinancialChartEngine
-from cfa_quant.volatility_surface import VolatilitySurfaceEngine
-from cfa_quant.excel_exporter import ExcelModelExporter
-from cfa_quant.ips_generator import IpsGeneratorEngine, ClientProfile
-from cfa_quant.lifecycle_portfolio import LifeCyclePortfolioEngine, LifeCycleClient
-from cfa_quant.tax_legal_engine import TaxLegalOptimizationEngine, AccountBalances
-from cfa_quant.fixed_income_ldi import FixedIncomeLdiEngine, BondAsset, LiabilityObligation
-from cfa_quant.hopper import CentralDataHopper
-from cfa_quant.scenario_lab import ScenarioLabEngine
-from cfa_quant.marginal_allocation import MarginalAllocationEngine
-from cfa_quant.agent_harness import CfaAgentHarness
-from cfa_quant.instruments.portfolio import UnifiedPortfolio
-from cfa_quant.instruments.fixed_income import FixedCouponBond, InflationLinkedBond
-from cfa_quant.instruments.equity import PublicEquityStock, RealEstateAsset, PrivateEquityHolding
-
-from pipeline.sec_edgar_client import SecEdgarClient
-from pipeline.market_data import MarketDataClient
-from pipeline.macro_engine import MacroEngine
-from pipeline.industry_benchmarks import IndustryBenchmarkEngine
-from pipeline.capm_sml_model import CapmSmlModel
-from pipeline.cfa_valuation_engine import CfaValuationEngine
-from forensic_accounting import ForensicAccountingEngine
+from cfa_quant import (
+    UnifiedPortfolio, FixedCouponBond, InflationLinkedBond, MunicipalBond, MortgageBackedSecurity,
+    PublicEquityStock, RealEstateAsset, PrivateEquityHolding,
+    CfaValuationEngine, ForensicAccountingEngine, CapmSmlModel, IndustryBenchmarkEngine, ExcelModelExporter,
+    ScenarioLabEngine, MarginalAllocationEngine, PerformanceAttributionEngine, FixedIncomeLdiEngine, VolatilitySurfaceEngine,
+    LifeCyclePortfolioEngine, LifeCycleClient, IpsGeneratorEngine, ClientProfile, TaxLegalOptimizationEngine, AccountBalances,
+    SecurityMaster, TransactionLedger, CentralDataHopper, MacroEngine, SecEdgarClient, MarketDataClient,
+    CfaAgentHarness, HybridRagEngine, PortfolioVisualizer, FinancialChartEngine
+)
 from scripts.query_cfa_kb import search_kb
 
 st.set_page_config(
@@ -49,7 +32,7 @@ if "chat_history" not in st.session_state:
     st.session_state.chat_history = [
         {
             "role": "assistant",
-            "content": "👋 **Hello! I am your CFA Agentic Copilot.** I have full read/write access to our 3,871-topic curriculum library, live SEC filings, DCF engines, 3D volatility surfaces, and macroeconomic stress simulators. Ask me a question, or command me to value a stock or stress-test a portfolio!",
+            "content": "👋 **Hello! I am your CFA Agentic Copilot.** I have full read/write access to our 3,871-topic curriculum library, live SEC filings, DCF engines, Muni TEY solvers, DuckDB transaction ledgers, and CIPM attribution engines. Ask me a question or command tools!",
             "tool_invoked": None
         }
     ]
@@ -64,7 +47,6 @@ with st.sidebar:
     with st.expander("🤖 **CFA Autonomous Copilot Pane**", expanded=True):
         st.caption("AI Agent with live tool-calling and sandbox workspace.")
         
-        # Chat History Container
         chat_container = st.container(height=320)
         for msg in st.session_state.chat_history:
             with chat_container.chat_message(msg["role"]):
@@ -72,12 +54,10 @@ with st.sidebar:
                     st.caption(f"⚙️ **Tool Executed:** `{msg['tool_invoked']}`")
                 st.markdown(msg["content"])
                 
-        # Chat Input
         copilot_prompt = st.chat_input("Ask Copilot or command tools...")
         if copilot_prompt:
             st.session_state.chat_history.append({"role": "user", "content": copilot_prompt, "tool_invoked": None})
             
-            # Execute Harness Dispatcher
             harness = CfaAgentHarness()
             with st.spinner("🤖 Copilot reasoning and executing tools..."):
                 agent_res = harness.process_chat_message(copilot_prompt)
@@ -89,7 +69,6 @@ with st.sidebar:
             })
             st.rerun()
 
-        # Workspace File Drawer
         harness_temp = CfaAgentHarness()
         w_files = harness_temp.list_workspace_files()
         if w_files:
@@ -98,11 +77,13 @@ with st.sidebar:
                 st.code(f"{wf['filename']} ({wf['size_bytes']} B)", language="text")
 
 # ==================== MAIN DASHBOARD TABS ====================
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14 = st.tabs([
     "🏛️ Valuation & SML",
     "📈 Price Action & Zoom",
     "🌐 3D Vol Surface",
     "➕ Marginal Asset Addition",
+    "🏛️ Muni Bonds & TEY",
+    "📊 CIPM Attribution",
     "🧪 Scenario Lab & Compare",
     "🛡️ Fixed Income LDI",
     "🎯 Opportunity Cost & EVA",
@@ -177,7 +158,6 @@ if has_data:
         col3.metric("Residual Income Value", f"${ri_res['intrinsic_value_per_share']:,.2f}")
         col4.metric("Dynamic WACC", f"{wacc_res['wacc']*100:.2f}%")
         
-        # 1-Click Excel Exporter Download Button
         exporter = ExcelModelExporter()
         wb_bytes = exporter.generate_valuation_workbook(
             ticker=ticker,
@@ -307,7 +287,6 @@ with tab4:
         k4.metric("Diversification Benefit", f"{sim_res.diversification_benefit_pct:.1f}%")
         
         st.success(f"**Recommendation Verdict:** {sim_res.recommendation_verdict}")
-        
         st.plotly_chart(f_3d, use_container_width=True)
         
         v_c1, v_c2 = st.columns(2)
@@ -316,8 +295,100 @@ with tab4:
         with v_c2:
             st.plotly_chart(f_donut, use_container_width=True)
 
-# ------------------ TAB 5: SCENARIO LAB & PORTFOLIO COMPARE ------------------
+# ------------------ TAB 5: MUNICIPAL BONDS & TAX-EQUIVALENT YIELD (TEY) ------------------
 with tab5:
+    st.header("🏛️ Institutional Municipal Bond & Tax-Equivalent Yield (TEY) Studio")
+    st.caption("Evaluates municipal bond tax-alpha, Muni/Treasury yield ratios, and Key Rate Duration (KRD) curves.")
+    
+    col_m1, col_m2 = st.columns(2)
+    with col_m1:
+        st.subheader("📋 Municipal Bond Parameters")
+        muni_name = st.text_input("Muni Bond Name", value="State of California General Obligation Bond 2035")
+        muni_type = st.selectbox("Bond Structure", ["GO (General Obligation - Tax Backed)", "Revenue (Enterprise / Revenue Backed)"])
+        muni_state = st.selectbox("Issuing State", ["CA", "NY", "FL", "TX", "IL", "NJ", "MA"])
+        muni_yield = st.number_input("Stated Muni Yield to Maturity (YTM %)", value=3.45, step=0.05) / 100.0
+        muni_mat = st.number_input("Maturity (Years)", value=10.0, step=0.5)
+        
+    with col_m2:
+        st.subheader("⚖️ Investor Tax Profile (2026 Brackets)")
+        fed_tax = st.selectbox("Federal Marginal Tax Bracket", [0.37, 0.35, 0.32, 0.24], format_func=lambda x: f"{x*100:.0f}%")
+        state_tax = st.number_input("State Marginal Tax Rate (%)", value=9.3 if muni_state=="CA" else (6.85 if muni_state=="NY" else 0.0), step=0.1) / 100.0
+        t10y_yield = st.number_input("10Y US Treasury Benchmark Yield (%)", value=4.74, step=0.01) / 100.0
+        
+    muni_inst = MunicipalBond(
+        name=muni_name,
+        muni_type="GO" if "GO" in muni_type else "Revenue",
+        issuing_state=muni_state,
+        yield_to_maturity=muni_yield,
+        maturity_years=muni_mat,
+        treasury_benchmark_10y_yield=t10y_yield
+    )
+    
+    tey_val = muni_inst.compute_tax_equivalent_yield(federal_tax_rate=fed_tax, state_tax_rate=state_tax)
+    ratio_val = muni_inst.compute_muni_to_treasury_ratio()
+    krd_dict = muni_inst.compute_key_rate_durations()
+    
+    mb1, mb2, mb3, mb4 = st.columns(4)
+    mb1.metric("Stated Tax-Free Yield", f"{muni_yield*100:.2f}%")
+    mb2.metric("Tax-Equivalent Yield (TEY)", f"{tey_val*100:.2f}%", f"+{(tey_val - muni_yield)*100:.2f}% Tax Alpha")
+    mb3.metric("10Y Muni/Treasury Ratio", f"{ratio_val:.1f}%", muni_inst.get_valuation_signal())
+    mb4.metric("Modified Duration", f"{muni_inst.compute_modified_duration():.2f} yrs")
+    
+    st.markdown("---")
+    st.subheader("📊 Key Rate Duration (KRD) Curve Sensitivity")
+    df_krd = pd.DataFrame([{"Tenor": k.replace("KRD_", ""), "Key Rate Duration (Years)": v} for k, v in krd_dict.items()])
+    st.dataframe(df_krd, use_container_width=True)
+
+# ------------------ TAB 6: CFA / CIPM PERFORMANCE ATTRIBUTION ------------------
+with tab6:
+    st.header("📊 CFA Level III & CIPM Institutional Performance Attribution")
+    st.caption("Decomposes portfolio excess returns using Brinson-Fachler Equity Attribution and Campisi Fixed Income Attribution.")
+    
+    att_mode = st.radio("Attribution Methodology", ["Equity: Brinson-Fachler (Sector Allocation vs. Stock Selection)", "Fixed Income: Campisi (Income, Curve, Spread, Selection)"], horizontal=True)
+    
+    att_eng = PerformanceAttributionEngine()
+    
+    if "Equity" in att_mode:
+        st.subheader("🔬 Equity Sector Allocation & Selection Decomposition")
+        df_sample_sec = pd.DataFrame([
+            {"sector": "Information Technology", "port_weight": 0.35, "bench_weight": 0.28, "port_return": 0.24, "bench_return": 0.20},
+            {"sector": "Health Care", "port_weight": 0.15, "bench_weight": 0.12, "port_return": 0.08, "bench_return": 0.06},
+            {"sector": "Financials", "port_weight": 0.20, "bench_weight": 0.22, "port_return": 0.12, "bench_return": 0.14},
+            {"sector": "Consumer Discretionary", "port_weight": 0.12, "bench_weight": 0.18, "port_return": 0.15, "bench_return": 0.11},
+            {"sector": "Utilities & Energy", "port_weight": 0.18, "bench_weight": 0.20, "port_return": 0.04, "bench_return": 0.02}
+        ])
+        
+        bf_res = att_eng.compute_brinson_attribution(df_sample_sec, model="Brinson-Fachler")
+        
+        ab1, ab2, ab3, ab4 = st.columns(4)
+        ab1.metric("Portfolio Return", f"{bf_res.portfolio_total_return_pct:.2f}%")
+        ab2.metric("Benchmark Return", f"{bf_res.benchmark_total_return_pct:.2f}%")
+        ab3.metric("Excess Return (Alpha)", f"{bf_res.excess_return_pct:+.2f}%")
+        ab4.metric("Selection Value Added", f"{bf_res.total_selection_effect_bps:+.1f} bps")
+        
+        st.table(bf_res.sector_breakdown)
+    else:
+        st.subheader("🔬 Fixed Income Campisi Attribution Breakdown")
+        camp_res = att_eng.compute_campisi_attribution(
+            portfolio_coupon_income=0.0425,
+            portfolio_duration=6.8,
+            parallel_yield_shift_bps=35.0,
+            curve_twist_slope_bps=-15.0,
+            spread_duration=4.2,
+            credit_spread_change_bps=-20.0,
+            portfolio_total_return=0.0385,
+            benchmark_total_return=0.0290
+        )
+        
+        cb1, cb2, cb3 = st.columns(3)
+        cb1.metric("1. Coupon Income Return", f"{camp_res.income_effect_pct:+.2f}%")
+        cb2.metric("2. Treasury Shift (+35bps)", f"{camp_res.treasury_curve_shift_pct:+.2f}%")
+        cb3.metric("3. Spread Tightening (-20bps)", f"{camp_res.credit_spread_effect_pct:+.2f}%")
+        
+        st.info(f"**Specific Bond Selection Alpha:** {camp_res.selection_alpha_pct:+.2f}% | Total Excess Return: {camp_res.excess_return_pct:+.2f}%")
+
+# ------------------ TAB 7: SCENARIO LAB & PORTFOLIO COMPARE ------------------
+with tab7:
     st.header("🧪 CFA Multi-Portfolio Comparison & Macroeconomic Stress Lab")
     st.caption("Head-to-head comparison of Current vs. Proposed Portfolios and simulation of historical macro shocks.")
     
@@ -353,8 +424,8 @@ with tab5:
     st.subheader("⚡ Macroeconomic Stress Test & Crisis Simulation")
     st.table(comp_report.stress_test_comparison)
 
-# ------------------ TAB 6: FIXED INCOME LDI & IMMUNIZATION ------------------
-with tab6:
+# ------------------ TAB 8: FIXED INCOME LDI & IMMUNIZATION ------------------
+with tab8:
     st.header("🛡️ CFA Level III Fixed Income LDI & Immunization Studio")
     st.caption("Matches portfolio duration, satisfies convexity constraints, and minimizes M^2 structural dispersion.")
     
@@ -412,8 +483,8 @@ with tab6:
             })
         st.table(pd.DataFrame(shock_rows))
 
-    # ------------------ TAB 7: OPPORTUNITY COST & EVA ------------------
-    with tab7:
+    # ------------------ TAB 9: OPPORTUNITY COST & EVA ------------------
+    with tab9:
         st.header("🎯 Opportunity Cost & Capital Allocation Assessment")
         opp_eng = OpportunityCostEngine(risk_free_rate=rf, equity_risk_premium=0.050)
         opp_res = opp_eng.evaluate_opportunity_cost(
@@ -437,8 +508,8 @@ with tab6:
         
         st.markdown(f"### 📋 Allocation Verdict\n> **{opp_res.opportunity_cost_verdict}**")
 
-    # ------------------ TAB 8: PEER COMPS & DUPONT 5-WAY ------------------
-    with tab8:
+    # ------------------ TAB 10: PEER COMPS & DUPONT 5-WAY ------------------
+    with tab10:
         st.header("👥 Competitor Benchmarking & DuPont 5-Way Analysis")
         c1, c2 = st.columns([1, 1])
         with c1:
@@ -460,8 +531,8 @@ with tab6:
                 df_peers = pd.DataFrame(peer_comp["peer_data"])
                 st.dataframe(df_peers, use_container_width=True)
 
-    # ------------------ TAB 9: IPS & LIFE-CYCLE GLIDEPATH (CFA LEVEL III) ------------------
-    with tab9:
+    # ------------------ TAB 11: IPS & LIFE-CYCLE GLIDEPATH (CFA LEVEL III) ------------------
+    with tab11:
         st.header("📝 Institutional Investment Policy Statement (IPS) & Life-Cycle Glidepath")
         st.caption("Constructs an audit-ready, institutional IPS and dynamic age-based asset allocation glidepath.")
         
@@ -535,8 +606,8 @@ with tab6:
             st.markdown(ips_doc)
             st.download_button("📥 Download Full IPS Document (.md)", ips_doc, file_name=f"IPS_{client_name.replace(' ', '_')}.md", mime="text/markdown")
 
-    # ------------------ TAB 10: TAX & LEGAL WEALTH ALPHA ------------------
-    with tab10:
+    # ------------------ TAB 12: TAX & LEGAL WEALTH ALPHA ------------------
+    with tab12:
         st.header("⚖️ Tax-Alpha Asset Location & Cross-Border Optimization")
         
         tl_col1, tl_col2 = st.columns(2)
@@ -566,8 +637,8 @@ with tab6:
                 st.metric("Annual Tax Savings", f"${arb_res['annual_tax_arbitrage_savings']:,.2f}/yr")
                 st.metric("10-Year Compounded Wealth Delta", f"${arb_res['10_year_compounded_savings']:,.2f}")
 
-    # ------------------ TAB 11: MACRO & YIELD CURVE ------------------
-    with tab11:
+    # ------------------ TAB 13: MACRO & YIELD CURVE ------------------
+    with tab13:
         st.header("🌐 Macroeconomic & Yield Curve Regime Studio")
         if has_data:
             m_summary = macro_snap["macro_risk_summary"]
@@ -586,10 +657,10 @@ with tab6:
             fig_yc.update_layout(title=f"Yield Curve Regime: {macro_snap['yield_curve']['regime']}", xaxis_title="Tenor", yaxis_title="Yield (%)", template="plotly_dark")
             st.plotly_chart(fig_yc, use_container_width=True)
 
-    # ------------------ TAB 12: CFA KNOWLEDGE BASE ------------------
-    with tab12:
+    # ------------------ TAB 14: CFA KNOWLEDGE BASE ------------------
+    with tab14:
         st.header("📚 CFA Curriculum & Quantitative Research Search")
-        query = st.text_input("Query CFA Knowledge Base (Formulas, LOS, Mock Exams, Research):", value="Human Capital Asset Allocation")
+        query = st.text_input("Query CFA Knowledge Base (Formulas, LOS, Mock Exams, Research):", value="Municipal Bond Tax Equivalent Yield")
         if query:
             results = search_kb(query, limit=5)
             if results:

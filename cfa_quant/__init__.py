@@ -16,6 +16,8 @@ from cfa_quant.instruments import (
     FixedCouponBond,
     ZeroCouponBond,
     InflationLinkedBond,
+    MunicipalBond,
+    MortgageBackedSecurity,
     PublicEquityStock,
     RealEstateAsset,
     PrivateEquityHolding,
@@ -43,6 +45,9 @@ from cfa_quant.valuation import (
 from cfa_quant.portfolio_risk import (
     ScenarioLabEngine,
     MarginalAllocationEngine,
+    PerformanceAttributionEngine,
+    BrinsonAttributionReport,
+    CampisiFixedIncomeAttributionReport,
     FixedIncomeLdiEngine,
     VolatilitySurfaceEngine
 )
@@ -57,8 +62,16 @@ from cfa_quant.wealth_advisory import (
     AccountBalances
 )
 
-# 5. Data & Warehouse Storage
+# 5. Data, Security Master & Transaction Warehouse
 from cfa_quant.data import (
+    SecurityMaster,
+    TransactionLedger,
+    TaxLot,
+    RealizedGainRecord,
+    DatabaseAdapter,
+    DuckDbAdapter,
+    SQLiteAdapter,
+    ClickHouseAdapter,
     CentralDataHopper,
     MacroEngine,
     SecEdgarClient,
@@ -86,6 +99,8 @@ __all__ = [
     "FixedCouponBond",
     "ZeroCouponBond",
     "InflationLinkedBond",
+    "MunicipalBond",
+    "MortgageBackedSecurity",
     "PublicEquityStock",
     "RealEstateAsset",
     "PrivateEquityHolding",
@@ -104,9 +119,12 @@ __all__ = [
     "CapmSmlModel",
     "IndustryBenchmarkEngine",
     "ExcelModelExporter",
-    # Portfolio Risk
+    # Portfolio Risk & Attribution
     "ScenarioLabEngine",
     "MarginalAllocationEngine",
+    "PerformanceAttributionEngine",
+    "BrinsonAttributionReport",
+    "CampisiFixedIncomeAttributionReport",
     "FixedIncomeLdiEngine",
     "VolatilitySurfaceEngine",
     # Wealth Advisory
@@ -116,7 +134,15 @@ __all__ = [
     "ClientProfile",
     "TaxLegalOptimizationEngine",
     "AccountBalances",
-    # Data
+    # Data & Warehouse
+    "SecurityMaster",
+    "TransactionLedger",
+    "TaxLot",
+    "RealizedGainRecord",
+    "DatabaseAdapter",
+    "DuckDbAdapter",
+    "SQLiteAdapter",
+    "ClickHouseAdapter",
     "CentralDataHopper",
     "MacroEngine",
     "SecEdgarClient",
