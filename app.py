@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 CFA Quantitative Suite - Institutional Equity Research & Wealth Management Dashboard
-Interactive Web Interface powered by Streamlit & Plotly.
+Interactive Web Interface powered by Streamlit, Plotly & Autonomous Agentic Copilot.
 """
 
 import streamlit as st
@@ -23,6 +23,7 @@ from cfa_quant.fixed_income_ldi import FixedIncomeLdiEngine, BondAsset, Liabilit
 from cfa_quant.hopper import CentralDataHopper
 from cfa_quant.scenario_lab import ScenarioLabEngine
 from cfa_quant.marginal_allocation import MarginalAllocationEngine
+from cfa_quant.agent_harness import CfaAgentHarness
 from cfa_quant.instruments.portfolio import UnifiedPortfolio
 from cfa_quant.instruments.fixed_income import FixedCouponBond, InflationLinkedBond
 from cfa_quant.instruments.equity import PublicEquityStock, RealEstateAsset, PrivateEquityHolding
@@ -43,13 +44,58 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-st.sidebar.title("📈 CFA Quant Engine")
-st.sidebar.markdown("Institutional Valuation, SAA & Wealth Management Suite")
-ticker = st.sidebar.text_input("Equity Ticker", value="MSFT").upper()
-growth_stage1 = st.sidebar.slider("Stage 1 Growth Rate (%)", min_value=1.0, max_value=30.0, value=8.0, step=0.5) / 100.0
+# Initialize Copilot Session State
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = [
+        {
+            "role": "assistant",
+            "content": "👋 **Hello! I am your CFA Agentic Copilot.** I have full read/write access to our 3,871-topic curriculum library, live SEC filings, DCF engines, 3D volatility surfaces, and macroeconomic stress simulators. Ask me a question, or command me to value a stock or stress-test a portfolio!",
+            "tool_invoked": None
+        }
+    ]
 
-st.sidebar.markdown("---")
-st.sidebar.caption("Grounded in CFA Level I/II/III Curriculum Standards.")
+# ==================== SIDEBAR COPILOT & CONTROLS ====================
+with st.sidebar:
+    st.title("📈 CFA Quant Suite")
+    ticker = st.text_input("Equity Ticker", value="MSFT").upper()
+    growth_stage1 = st.slider("Stage 1 Growth Rate (%)", min_value=1.0, max_value=30.0, value=8.0, step=0.5) / 100.0
+    
+    st.markdown("---")
+    with st.expander("🤖 **CFA Autonomous Copilot Pane**", expanded=True):
+        st.caption("AI Agent with live tool-calling and sandbox workspace.")
+        
+        # Chat History Container
+        chat_container = st.container(height=320)
+        for msg in st.session_state.chat_history:
+            with chat_container.chat_message(msg["role"]):
+                if msg.get("tool_invoked"):
+                    st.caption(f"⚙️ **Tool Executed:** `{msg['tool_invoked']}`")
+                st.markdown(msg["content"])
+                
+        # Chat Input
+        copilot_prompt = st.chat_input("Ask Copilot or command tools...")
+        if copilot_prompt:
+            st.session_state.chat_history.append({"role": "user", "content": copilot_prompt, "tool_invoked": None})
+            
+            # Execute Harness Dispatcher
+            harness = CfaAgentHarness()
+            with st.spinner("🤖 Copilot reasoning and executing tools..."):
+                agent_res = harness.process_chat_message(copilot_prompt)
+                
+            st.session_state.chat_history.append({
+                "role": "assistant",
+                "content": agent_res["response"],
+                "tool_invoked": agent_res["tool_invoked"]
+            })
+            st.rerun()
+
+        # Workspace File Drawer
+        harness_temp = CfaAgentHarness()
+        w_files = harness_temp.list_workspace_files()
+        if w_files:
+            st.markdown("📁 **Copilot Workspace Files:**")
+            for wf in w_files:
+                st.code(f"{wf['filename']} ({wf['size_bytes']} B)", language="text")
 
 # ==================== MAIN DASHBOARD TABS ====================
 tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12 = st.tabs([
@@ -223,7 +269,6 @@ with tab4:
     st.header("➕ Marginal Asset Addition & 3D Risk-Return Landscape")
     st.caption("Simulates the before-and-after impact of adding an investment to a portfolio across return, volatility, Sharpe ratio, and MCTR risk contributions.")
     
-    # Base Portfolio ($10M Traditional 60/40)
     base_p = UnifiedPortfolio("Marcus Family Wealth (Base)")
     base_p.add_instrument(PublicEquityStock("US Large Cap Equities", beta=1.0, expected_earnings_growth=0.065, historical_volatility=0.18), 6000000.0)
     base_p.add_instrument(FixedCouponBond("Core US Aggregate Bonds", coupon_rate=0.035, maturity_years=7.0, yield_to_maturity=0.045), 4000000.0)
@@ -255,7 +300,6 @@ with tab4:
         marg_eng = MarginalAllocationEngine()
         sim_res, f_3d, f_bar, f_donut = marg_eng.simulate_asset_addition(base_p, cand_inst, dollar_to_add=add_amount)
         
-        # Summary KPI Cards
         k1, k2, k3, k4 = st.columns(4)
         k1.metric("Return Delta", f"{sim_res.delta_metrics['return_delta_bps']:+.1f} bps/yr", f"New Return: {sim_res.metrics_after['expected_annual_return_pct']:.2f}%")
         k2.metric("Volatility Delta", f"{sim_res.delta_metrics['volatility_delta_bps']:+.1f} bps", "Lower Risk" if sim_res.delta_metrics['volatility_delta_bps'] < 0 else "Higher Risk")
@@ -264,7 +308,6 @@ with tab4:
         
         st.success(f"**Recommendation Verdict:** {sim_res.recommendation_verdict}")
         
-        # Visuals
         st.plotly_chart(f_3d, use_container_width=True)
         
         v_c1, v_c2 = st.columns(2)
@@ -417,143 +460,143 @@ with tab6:
                 df_peers = pd.DataFrame(peer_comp["peer_data"])
                 st.dataframe(df_peers, use_container_width=True)
 
-# ------------------ TAB 9: IPS & LIFE-CYCLE GLIDEPATH (CFA LEVEL III) ------------------
-with tab9:
-    st.header("📝 Institutional Investment Policy Statement (IPS) & Life-Cycle Glidepath")
-    st.caption("Constructs an audit-ready, institutional IPS and dynamic age-based asset allocation glidepath.")
-    
-    with st.form("ips_form"):
-        col_c1, col_c2 = st.columns(2)
-        with col_c1:
-            client_name = st.text_input("Client / Family Names", value="Dr. & Mrs. Alexander Wright")
-            client_age = st.number_input("Primary Investor Age", min_value=18, max_value=95, value=48, step=1)
-            spouse_age = st.number_input("Spouse Age (Optional)", min_value=18, max_value=95, value=46, step=1)
-            jurisdiction = st.selectbox("Residency / Tax Jurisdiction", ["United States (Tax-Exempt State: FL/TX/NV/WY)", "United States (California / High-Tax)", "United States (New York / High-Tax)", "United Kingdom (Non-Dom / Remittance)", "Switzerland (Lump-Sum)", "Puerto Rico (Act 60)"])
-            investable_assets = st.number_input("Total Investable Financial Assets ($)", min_value=100000.0, value=6500000.0, step=250000.0)
-            annual_spending = st.number_input("Annual Living Expenses / Spending ($)", min_value=10000.0, value=250000.0, step=10000.0)
-        with col_c2:
-            employment_income = st.number_input("Annual Employment / Business Income ($)", min_value=0.0, value=450000.0, step=25000.0)
-            human_cap_type = st.selectbox("Human Capital Character", ["bond_like (Low Career Volatility / Physician / Govt)", "equity_like (High Commission / Startup Founder)"])
-            bequest_goal = st.number_input("Bequest / Legacy Target ($)", value=3000000.0, step=250000.0)
-            risk_willing = st.selectbox("Subjective Risk Willingness", ["Aggressive", "Growth", "Moderate", "Conservative"])
+    # ------------------ TAB 9: IPS & LIFE-CYCLE GLIDEPATH (CFA LEVEL III) ------------------
+    with tab9:
+        st.header("📝 Institutional Investment Policy Statement (IPS) & Life-Cycle Glidepath")
+        st.caption("Constructs an audit-ready, institutional IPS and dynamic age-based asset allocation glidepath.")
+        
+        with st.form("ips_form"):
+            col_c1, col_c2 = st.columns(2)
+            with col_c1:
+                client_name = st.text_input("Client / Family Names", value="Dr. & Mrs. Alexander Wright")
+                client_age = st.number_input("Primary Investor Age", min_value=18, max_value=95, value=48, step=1)
+                spouse_age = st.number_input("Spouse Age (Optional)", min_value=18, max_value=95, value=46, step=1)
+                jurisdiction = st.selectbox("Residency / Tax Jurisdiction", ["United States (Tax-Exempt State: FL/TX/NV/WY)", "United States (California / High-Tax)", "United States (New York / High-Tax)", "United Kingdom (Non-Dom / Remittance)", "Switzerland (Lump-Sum)", "Puerto Rico (Act 60)"])
+                investable_assets = st.number_input("Total Investable Financial Assets ($)", min_value=100000.0, value=6500000.0, step=250000.0)
+                annual_spending = st.number_input("Annual Living Expenses / Spending ($)", min_value=10000.0, value=250000.0, step=10000.0)
+            with col_c2:
+                employment_income = st.number_input("Annual Employment / Business Income ($)", min_value=0.0, value=450000.0, step=25000.0)
+                human_cap_type = st.selectbox("Human Capital Character", ["bond_like (Low Career Volatility / Physician / Govt)", "equity_like (High Commission / Startup Founder)"])
+                bequest_goal = st.number_input("Bequest / Legacy Target ($)", value=3000000.0, step=250000.0)
+                risk_willing = st.selectbox("Subjective Risk Willingness", ["Aggressive", "Growth", "Moderate", "Conservative"])
+                
+            submit_ips = st.form_submit_button("🚀 Generate Institutional IPS & Age-Based Glidepath")
             
-        submit_ips = st.form_submit_button("🚀 Generate Institutional IPS & Age-Based Glidepath")
-        
-    if submit_ips:
-        h_type = "bond_like" if "bond_like" in human_cap_type else "equity_like"
-        lc_client = LifeCycleClient(
-            client_name=client_name,
-            current_age=client_age,
-            annual_employment_income=employment_income,
-            human_capital_type=h_type,
-            annual_living_expenses=annual_spending,
-            current_financial_assets=investable_assets,
-            bequest_target_usd=bequest_goal,
-            risk_willingness=risk_willing
-        )
-        
-        lc_engine = LifeCyclePortfolioEngine()
-        lc_profile = lc_engine.generate_lifecycle_profile(lc_client)
-        df_glidepath = lc_engine.generate_glidepath_trajectory(lc_client)
-        
-        st.subheader("📊 Holistic Economic Net Worth & SAA Glidepath")
-        w1, w2, w3, w4 = st.columns(4)
-        w1.metric("Financial Assets", f"${lc_profile.financial_capital:,.2f}")
-        w2.metric("Human Capital PV", f"${lc_profile.human_capital_pv:,.2f}", f"{lc_profile.human_capital_pct_of_wealth:.1f}% of Total")
-        w3.metric("Total Economic Net Worth", f"${lc_profile.total_economic_net_worth:,.2f}")
-        w4.metric("Recommended SAA", f"{lc_profile.recommended_equity_pct:.0f}% Equity / {lc_profile.recommended_fixed_income_pct:.0f}% FI")
-        
-        fig_glide = lc_engine.render_glidepath_figure(df_glidepath, client_name)
-        st.plotly_chart(fig_glide, use_container_width=True)
-        
-        st.subheader("🎯 Goals-Based Wealth Management (GBWM) Decomposition")
-        gb = lc_profile.goals_based_buckets
-        gb1, gb2, gb3 = st.columns(3)
-        gb1.metric("1. Lifestyle Protection Bucket", f"${gb.lifestyle_protection_usd:,.2f}", f"{gb.lifestyle_protection_pct:.1f}% of Portfolio")
-        gb2.metric("2. Aspirational Growth Bucket", f"${gb.aspirational_growth_usd:,.2f}", f"{gb.aspirational_growth_pct:.1f}% of Portfolio")
-        gb3.metric("3. Legacy & Bequest Bucket", f"${gb.legacy_bequest_usd:,.2f}", f"{gb.legacy_bequest_pct:.1f}% of Portfolio")
-        
-        st.markdown("---")
-        
-        profile = ClientProfile(
-            client_names=client_name,
-            ages=[client_age, spouse_age],
-            residence_jurisdiction=jurisdiction,
-            total_investable_assets=investable_assets,
-            annual_spending_needs=annual_spending,
-            human_capital_value=lc_profile.human_capital_pv,
-            human_capital_type=h_type,
-            bequest_legacy_goal=bequest_goal,
-            risk_willingness=risk_willing
-        )
-        ips_eng = IpsGeneratorEngine()
-        ips_doc = ips_eng.generate_full_ips_document(profile)
-        st.success("✓ Investment Policy Statement successfully compiled!")
-        st.markdown(ips_doc)
-        st.download_button("📥 Download Full IPS Document (.md)", ips_doc, file_name=f"IPS_{client_name.replace(' ', '_')}.md", mime="text/markdown")
-
-# ------------------ TAB 10: TAX & LEGAL WEALTH ALPHA ------------------
-with tab10:
-    st.header("⚖️ Tax-Alpha Asset Location & Cross-Border Optimization")
-    
-    tl_col1, tl_col2 = st.columns(2)
-    with tl_col1:
-        st.subheader("🏛️ Asset Location Optimizer")
-        st.caption("Places assets into Taxable vs. Traditional 401k vs. Roth accounts to minimize tax drag.")
-        taxable_bal = st.number_input("Taxable Brokerage Balance ($)", value=4500000.0, step=100000.0)
-        trad_bal = st.number_input("Tax-Deferred (Traditional 401k/IRA) Balance ($)", value=2500000.0, step=100000.0)
-        roth_bal = st.number_input("Tax-Exempt (Roth IRA/401k) Balance ($)", value=1500000.0, step=100000.0)
-        
-        if st.button("Compute Tax-Alpha Asset Placement"):
-            tl_eng = TaxLegalOptimizationEngine()
-            loc_res = tl_eng.optimize_asset_location(AccountBalances(taxable_bal, trad_bal, roth_bal))
-            st.metric("Estimated Annual Tax Drag Savings", f"${loc_res['estimated_annual_tax_savings_usd']:,.2f}", f"+{loc_res['tax_alpha_basis_points']} bps/yr Tax Alpha")
-            st.json(loc_res["asset_placement"])
+        if submit_ips:
+            h_type = "bond_like" if "bond_like" in human_cap_type else "equity_like"
+            lc_client = LifeCycleClient(
+                client_name=client_name,
+                current_age=client_age,
+                annual_employment_income=employment_income,
+                human_capital_type=h_type,
+                annual_living_expenses=annual_spending,
+                current_financial_assets=investable_assets,
+                bequest_target_usd=bequest_goal,
+                risk_willingness=risk_willing
+            )
             
-    with tl_col2:
-        st.subheader("🌐 State & Relocation Tax Arbitrage")
-        curr_st = st.selectbox("Current Residency State", ["California", "New York", "New Jersey", "Massachusetts"])
-        prop_st = st.selectbox("Proposed Relocation State", ["Florida", "Texas", "Nevada", "Wyoming", "Puerto Rico (Act 60)"])
-        inc_val = st.number_input("Annual Ordinary Income ($)", value=750000.0, step=50000.0)
-        cg_val = st.number_input("Annual Capital Gains Realized ($)", value=500000.0, step=50000.0)
-        
-        if st.button("Evaluate Jurisdiction Arbitrage"):
-            tl_eng = TaxLegalOptimizationEngine()
-            arb_res = tl_eng.evaluate_jurisdiction_tax_arbitrage(curr_st, prop_st, inc_val, cg_val)
-            st.metric("Annual Tax Savings", f"${arb_res['annual_tax_arbitrage_savings']:,.2f}/yr")
-            st.metric("10-Year Compounded Wealth Delta", f"${arb_res['10_year_compounded_savings']:,.2f}")
+            lc_engine = LifeCyclePortfolioEngine()
+            lc_profile = lc_engine.generate_lifecycle_profile(lc_client)
+            df_glidepath = lc_engine.generate_glidepath_trajectory(lc_client)
+            
+            st.subheader("📊 Holistic Economic Net Worth & SAA Glidepath")
+            w1, w2, w3, w4 = st.columns(4)
+            w1.metric("Financial Assets", f"${lc_profile.financial_capital:,.2f}")
+            w2.metric("Human Capital PV", f"${lc_profile.human_capital_pv:,.2f}", f"{lc_profile.human_capital_pct_of_wealth:.1f}% of Total")
+            w3.metric("Total Economic Net Worth", f"${lc_profile.total_economic_net_worth:,.2f}")
+            w4.metric("Recommended SAA", f"{lc_profile.recommended_equity_pct:.0f}% Equity / {lc_profile.recommended_fixed_income_pct:.0f}% FI")
+            
+            fig_glide = lc_engine.render_glidepath_figure(df_glidepath, client_name)
+            st.plotly_chart(fig_glide, use_container_width=True)
+            
+            st.subheader("🎯 Goals-Based Wealth Management (GBWM) Decomposition")
+            gb = lc_profile.goals_based_buckets
+            gb1, gb2, gb3 = st.columns(3)
+            gb1.metric("1. Lifestyle Protection Bucket", f"${gb.lifestyle_protection_usd:,.2f}", f"{gb.lifestyle_protection_pct:.1f}% of Portfolio")
+            gb2.metric("2. Aspirational Growth Bucket", f"${gb.aspirational_growth_usd:,.2f}", f"{gb.aspirational_growth_pct:.1f}% of Portfolio")
+            gb3.metric("3. Legacy & Bequest Bucket", f"${gb.legacy_bequest_usd:,.2f}", f"{gb.legacy_bequest_pct:.1f}% of Portfolio")
+            
+            st.markdown("---")
+            
+            profile = ClientProfile(
+                client_names=client_name,
+                ages=[client_age, spouse_age],
+                residence_jurisdiction=jurisdiction,
+                total_investable_assets=investable_assets,
+                annual_spending_needs=annual_spending,
+                human_capital_value=lc_profile.human_capital_pv,
+                human_capital_type=h_type,
+                bequest_legacy_goal=bequest_goal,
+                risk_willingness=risk_willing
+            )
+            ips_eng = IpsGeneratorEngine()
+            ips_doc = ips_eng.generate_full_ips_document(profile)
+            st.success("✓ Investment Policy Statement successfully compiled!")
+            st.markdown(ips_doc)
+            st.download_button("📥 Download Full IPS Document (.md)", ips_doc, file_name=f"IPS_{client_name.replace(' ', '_')}.md", mime="text/markdown")
 
-# ------------------ TAB 11: MACRO & YIELD CURVE ------------------
-with tab11:
-    st.header("🌐 Macroeconomic & Yield Curve Regime Studio")
-    if has_data:
-        m_summary = macro_snap["macro_risk_summary"]
-        mc1, mc2, mc3, mc4 = st.columns(4)
-        mc1.metric("10Y Treasury Yield", m_summary["risk_free_rate_10y"])
-        mc2.metric("SOFR Benchmark Rate", m_summary["sofr_benchmark"])
-        mc3.metric("10Y Breakeven Inflation", m_summary["inflation_expectation_10y"])
-        mc4.metric("HY Credit Spread", m_summary["credit_spread_hy_bps"])
+    # ------------------ TAB 10: TAX & LEGAL WEALTH ALPHA ------------------
+    with tab10:
+        st.header("⚖️ Tax-Alpha Asset Location & Cross-Border Optimization")
         
-        yc = macro_snap["yield_curve"]["yields"]
-        tenors = list(yc.keys())
-        rates = [yc[k] * 100 for k in tenors]
-        
-        fig_yc = go.Figure()
-        fig_yc.add_trace(go.Scatter(x=tenors, y=rates, mode='lines+markers', name='Yield Curve', line=dict(color='#00E676', width=3), marker=dict(size=10)))
-        fig_yc.update_layout(title=f"Yield Curve Regime: {macro_snap['yield_curve']['regime']}", xaxis_title="Tenor", yaxis_title="Yield (%)", template="plotly_dark")
-        st.plotly_chart(fig_yc, use_container_width=True)
+        tl_col1, tl_col2 = st.columns(2)
+        with tl_col1:
+            st.subheader("🏛️ Asset Location Optimizer")
+            st.caption("Places assets into Taxable vs. Traditional 401k vs. Roth accounts to minimize tax drag.")
+            taxable_bal = st.number_input("Taxable Brokerage Balance ($)", value=4500000.0, step=100000.0)
+            trad_bal = st.number_input("Tax-Deferred (Traditional 401k/IRA) Balance ($)", value=2500000.0, step=100000.0)
+            roth_bal = st.number_input("Tax-Exempt (Roth IRA/401k) Balance ($)", value=1500000.0, step=100000.0)
+            
+            if st.button("Compute Tax-Alpha Asset Placement"):
+                tl_eng = TaxLegalOptimizationEngine()
+                loc_res = tl_eng.optimize_asset_location(AccountBalances(taxable_bal, trad_bal, roth_bal))
+                st.metric("Estimated Annual Tax Drag Savings", f"${loc_res['estimated_annual_tax_savings_usd']:,.2f}", f"+{loc_res['tax_alpha_basis_points']} bps/yr Tax Alpha")
+                st.json(loc_res["asset_placement"])
+                
+        with tl_col2:
+            st.subheader("🌐 State & Relocation Tax Arbitrage")
+            curr_st = st.selectbox("Current Residency State", ["California", "New York", "New Jersey", "Massachusetts"])
+            prop_st = st.selectbox("Proposed Relocation State", ["Florida", "Texas", "Nevada", "Wyoming", "Puerto Rico (Act 60)"])
+            inc_val = st.number_input("Annual Ordinary Income ($)", value=750000.0, step=50000.0)
+            cg_val = st.number_input("Annual Capital Gains Realized ($)", value=500000.0, step=50000.0)
+            
+            if st.button("Evaluate Jurisdiction Arbitrage"):
+                tl_eng = TaxLegalOptimizationEngine()
+                arb_res = tl_eng.evaluate_jurisdiction_tax_arbitrage(curr_st, prop_st, inc_val, cg_val)
+                st.metric("Annual Tax Savings", f"${arb_res['annual_tax_arbitrage_savings']:,.2f}/yr")
+                st.metric("10-Year Compounded Wealth Delta", f"${arb_res['10_year_compounded_savings']:,.2f}")
 
-# ------------------ TAB 12: CFA KNOWLEDGE BASE ------------------
-with tab12:
-    st.header("📚 CFA Curriculum & Quantitative Research Search")
-    query = st.text_input("Query CFA Knowledge Base (Formulas, LOS, Mock Exams, Research):", value="Human Capital Asset Allocation")
-    if query:
-        results = search_kb(query, limit=5)
-        if results:
-            for r in results:
-                with st.expander(f"📖 {r['level']} | {r['topic']} ➔ {r['subtopic']}"):
-                    if r['formulas']:
-                        st.markdown(f"**Key Focus/Formulas:**\n```\n{r['formulas']}\n```")
-                    st.markdown(f"**Excerpt:**\n{r['content']}")
-        else:
-            st.info("No matching curriculum items found.")
+    # ------------------ TAB 11: MACRO & YIELD CURVE ------------------
+    with tab11:
+        st.header("🌐 Macroeconomic & Yield Curve Regime Studio")
+        if has_data:
+            m_summary = macro_snap["macro_risk_summary"]
+            mc1, mc2, mc3, mc4 = st.columns(4)
+            mc1.metric("10Y Treasury Yield", m_summary["risk_free_rate_10y"])
+            mc2.metric("SOFR Benchmark Rate", m_summary["sofr_benchmark"])
+            mc3.metric("10Y Breakeven Inflation", m_summary["inflation_expectation_10y"])
+            mc4.metric("HY Credit Spread", m_summary["credit_spread_hy_bps"])
+            
+            yc = macro_snap["yield_curve"]["yields"]
+            tenors = list(yc.keys())
+            rates = [yc[k] * 100 for k in tenors]
+            
+            fig_yc = go.Figure()
+            fig_yc.add_trace(go.Scatter(x=tenors, y=rates, mode='lines+markers', name='Yield Curve', line=dict(color='#00E676', width=3), marker=dict(size=10)))
+            fig_yc.update_layout(title=f"Yield Curve Regime: {macro_snap['yield_curve']['regime']}", xaxis_title="Tenor", yaxis_title="Yield (%)", template="plotly_dark")
+            st.plotly_chart(fig_yc, use_container_width=True)
+
+    # ------------------ TAB 12: CFA KNOWLEDGE BASE ------------------
+    with tab12:
+        st.header("📚 CFA Curriculum & Quantitative Research Search")
+        query = st.text_input("Query CFA Knowledge Base (Formulas, LOS, Mock Exams, Research):", value="Human Capital Asset Allocation")
+        if query:
+            results = search_kb(query, limit=5)
+            if results:
+                for r in results:
+                    with st.expander(f"📖 {r['level']} | {r['topic']} ➔ {r['subtopic']}"):
+                        if r['formulas']:
+                            st.markdown(f"**Key Focus/Formulas:**\n```\n{r['formulas']}\n```")
+                        st.markdown(f"**Excerpt:**\n{r['content']}")
+            else:
+                st.info("No matching curriculum items found.")
