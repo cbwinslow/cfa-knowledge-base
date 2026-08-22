@@ -16,6 +16,7 @@ from cfa_quant import (
     BaseValuationModel, UnifiedValuationSuite, ThreeStageDcfValuation, ResidualIncomeValuation, DividendDiscountModelValuation, MarketMultiplesValuation,
     PortfolioRebalancingEngine, RebalancingBlotter, TradeOrder,
     FactorRiskModelEngine, ActiveRiskDecomposition, FactorExposure,
+    CoveredCallStrategy, ProtectiveCollarStrategy, BullCallSpreadStrategy, IronCondorStrategy, LongStraddleStrategy, GreeksHedgingSolver,
     BlackLittermanEngine, GipsCompositeEngine, ScenarioLabEngine, MarginalAllocationEngine, PerformanceAttributionEngine, FixedIncomeLdiEngine, VolatilitySurfaceEngine,
     LifeCyclePortfolioEngine, LifeCycleClient, IpsGeneratorEngine, ClientProfile, TaxLegalOptimizationEngine, AccountBalances,
     SecurityMaster, TransactionLedger, CustodianIngestionGateway, NewsWireEngine, CentralDataHopper, MacroEngine, SecEdgarClient, MarketDataClient,
@@ -286,6 +287,78 @@ if has_data:
         
         fig_2d = vol_eng.render_2d_skew_and_term_structure(mesh, ticker)
         st.plotly_chart(fig_2d, use_container_width=True)
+
+        st.markdown("---")
+        st.subheader("🎯 Institutional Options Strategy & Payoff Architecture")
+        st.caption("Constructs multi-leg derivatives strategies with dynamic Black-Scholes terminal P&L and Greeks.")
+        
+        opt_strat_choice = st.selectbox(
+            "Select Derivatives Strategy Structure:",
+            ["Covered Call (Yield Enhancement)", "Protective Collar (Downside Floor + Financed Cap)", "Bull Call Spread (Defined Risk Vertical)", "Iron Condor (Delta-Neutral Range-Bound)", "Long Straddle (Pure Volatility Breakout)"]
+        )
+        
+        s0_spot = float(v_metrics.spot_price if v_metrics.spot_price > 0 else 500.0)
+        spots_range = np.linspace(s0_spot * 0.70, s0_spot * 1.30, 100)
+        
+        if opt_strat_choice.startswith("Covered Call"):
+            c_call_k = st.slider("Call Strike Price ($)", min_value=float(s0_spot * 0.90), max_value=float(s0_spot * 1.25), value=float(round(s0_spot * 1.05, 1)))
+            strat_inst = CoveredCallStrategy(spot_price_entry=s0_spot, call_strike=c_call_k, time_to_expiry_years=0.25, implied_volatility=v_metrics.atm_iv_30d/100.0 or 0.22)
+        elif opt_strat_choice.startswith("Protective Collar"):
+            col_p_k = st.slider("Protective Put Floor Strike ($)", min_value=float(s0_spot * 0.75), max_value=float(s0_spot * 0.98), value=float(round(s0_spot * 0.90, 1)))
+            col_c_k = st.slider("Financing Call Cap Strike ($)", min_value=float(s0_spot * 1.02), max_value=float(s0_spot * 1.30), value=float(round(s0_spot * 1.10, 1)))
+            strat_inst = ProtectiveCollarStrategy(spot_price_entry=s0_spot, put_strike=col_p_k, call_strike=col_c_k, time_to_expiry_years=0.25, implied_volatility=v_metrics.atm_iv_30d/100.0 or 0.22)
+        elif opt_strat_choice.startswith("Bull Call"):
+            b_k1 = st.slider("Lower Call Strike K1 ($)", min_value=float(s0_spot * 0.85), max_value=float(s0_spot * 1.05), value=float(round(s0_spot * 0.98, 1)))
+            b_k2 = st.slider("Upper Call Strike K2 ($)", min_value=float(b_k1 + 1.0), max_value=float(s0_spot * 1.25), value=float(round(s0_spot * 1.08, 1)))
+            strat_inst = BullCallSpreadStrategy(spot_price_entry=s0_spot, lower_strike_k1=b_k1, upper_strike_k2=b_k2, time_to_expiry_years=0.25, implied_volatility=v_metrics.atm_iv_30d/100.0 or 0.22)
+        elif opt_strat_choice.startswith("Iron Condor"):
+            ic_k1 = s0_spot * 0.85
+            ic_k2 = s0_spot * 0.92
+            ic_k3 = s0_spot * 1.08
+            ic_k4 = s0_spot * 1.15
+            strat_inst = IronCondorStrategy(spot_price_entry=s0_spot, put_long_k1=ic_k1, put_short_k2=ic_k2, call_short_k3=ic_k3, call_long_k4=ic_k4, time_to_expiry_years=0.15, implied_volatility=v_metrics.atm_iv_30d/100.0 or 0.22)
+        else:
+            strat_inst = LongStraddleStrategy(spot_price_entry=s0_spot, strike_price=s0_spot, time_to_expiry_years=0.25, implied_volatility=v_metrics.atm_iv_30d/100.0 or 0.22)
+            
+        pnl_arr = strat_inst.compute_profit_loss(spots_range)
+        max_p, max_l = strat_inst.get_max_profit_and_loss()
+        bes = strat_inst.get_break_even_points()
+        port_g = strat_inst.compute_portfolio_greeks(s0_spot)
+        
+        op1, op2, op3, op4 = st.columns(4)
+        op1.metric("Max Profit", f"${max_p:,.2f}" if max_p is not None else "Unlimited")
+        op2.metric("Max Loss", f"${max_l:,.2f}" if max_l is not None else "Unlimited")
+        op3.metric("Breakeven Spot", ", ".join([f"${b:.2f}" for b in bes]))
+        op4.metric("Strategy Net Delta", f"{port_g['total_delta']:+.2f}", f"Gamma: {port_g['total_gamma']:+.3f}")
+        
+        fig_pnl = go.Figure()
+        fig_pnl.add_trace(go.Scatter(x=spots_range, y=pnl_arr, mode='lines', name='Expiration Net P&L ($)', line=dict(color='#00E676' if pnl_arr[-1]>=0 else '#FF5252', width=3)))
+        fig_pnl.add_hline(y=0.0, line_dash="dash", line_color="#888888")
+        fig_pnl.add_vline(x=s0_spot, line_dash="dot", line_color="#FFA726", annotation_text=f"Spot (${s0_spot:.2f})")
+        fig_pnl.update_layout(title=f"{strat_inst.name} Terminal Profit & Loss Profile", xaxis_title="Underlying Stock Spot Price ($)", yaxis_title="Net Profit / Loss ($)", template="plotly_dark")
+        st.plotly_chart(fig_pnl, use_container_width=True)
+
+        st.markdown("---")
+        st.subheader("🛡️ Multi-Greeks Hedging Optimization Solver")
+        st.caption("Solves exact shares and option contracts to immunize against directional (Delta), curve (Gamma), and volatility (Vega) risk.")
+        
+        h_col1, h_col2 = st.columns(2)
+        with h_col1:
+            target_hedge = st.selectbox("Hedging Target Regime:", ["Delta-Neutral (Underlying Stock)", "Gamma-Delta Neutral (1 Option + Stock)", "Vega-Gamma-Delta Neutral (2 Options + Stock)"])
+        with h_col2:
+            st.info(f"Active Position Greeks: **Delta = {port_g['total_delta']:+.1f}** | **Gamma = {port_g['total_gamma']:+.2f}** | **Vega = {port_g['total_vega_per_1pct']:+.2f}**")
+            
+        if target_hedge.startswith("Delta-Neutral"):
+            sol_h = GreeksHedgingSolver.solve_delta_neutral_hedging(port_g["total_delta"])
+        elif target_hedge.startswith("Gamma-Delta"):
+            sol_h = GreeksHedgingSolver.solve_gamma_delta_neutral_hedging(port_g["total_delta"], port_g["total_gamma"], h1_delta_per_contract=50.0, h1_gamma_per_contract=2.5)
+        else:
+            sol_h = GreeksHedgingSolver.solve_vega_gamma_delta_neutral_hedging(
+                port_g["total_delta"], port_g["total_gamma"], port_g["total_vega_per_1pct"],
+                h1_greeks_per_contract={"delta": 45.0, "gamma": 2.5, "vega": 12.0},
+                h2_greeks_per_contract={"delta": -30.0, "gamma": 1.5, "vega": 18.0}
+            )
+        st.json(sol_h)
 
 # ------------------ TAB 4: MARGINAL ASSET ADDITION & 3D LANDSCAPE ------------------
 with tab4:

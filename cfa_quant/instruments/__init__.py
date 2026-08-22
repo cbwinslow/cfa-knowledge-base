@@ -15,6 +15,18 @@ from .fixed_income import FixedCouponBond, ZeroCouponBond, InflationLinkedBond
 from .muni_and_structured import MunicipalBond, MortgageBackedSecurity
 from .equity import PublicEquityStock, RealEstateAsset, PrivateEquityHolding
 from .derivatives_fx import InterestRateSwap, ForexForward, EquityIndexFutures, OptionsContract
+from .options_strategies import (
+    BaseOptionStrategy,
+    OptionLeg,
+    OptionType,
+    TradeAction,
+    CoveredCallStrategy,
+    ProtectiveCollarStrategy,
+    BullCallSpreadStrategy,
+    IronCondorStrategy,
+    LongStraddleStrategy,
+    GreeksHedgingSolver
+)
 from .market_microstructure import MarketMicrostructureEngine, OrderBookSnapshot, OrderBookLevel, ImplementationShortfallResult
 from .portfolio import UnifiedPortfolio
 
@@ -33,6 +45,16 @@ __all__ = [
     "ForexForward",
     "EquityIndexFutures",
     "OptionsContract",
+    "BaseOptionStrategy",
+    "OptionLeg",
+    "OptionType",
+    "TradeAction",
+    "CoveredCallStrategy",
+    "ProtectiveCollarStrategy",
+    "BullCallSpreadStrategy",
+    "IronCondorStrategy",
+    "LongStraddleStrategy",
+    "GreeksHedgingSolver",
     "MarketMicrostructureEngine",
     "OrderBookSnapshot",
     "OrderBookLevel",
