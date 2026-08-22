@@ -5,10 +5,14 @@ env/
 __pycache__/
 *.pyc
 *.pyo
+*.egg-info/
+build/
+dist/
 
-# Raw downloads & caches (The SQLite DB in data/ stores the processed & indexed knowledge)
+# Raw downloads & local temporary caches
 data/downloads/
 data/processed/
+data/sec_cache/
 
 # System / Editor files
 .DS_Store
