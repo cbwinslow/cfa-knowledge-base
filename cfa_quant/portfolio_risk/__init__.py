@@ -1,6 +1,7 @@
 """
-Portfolio Risk, Optimization, Asset Allocation, GIPS & Rebalancing Package
+Portfolio Risk, Optimization, Asset Allocation, GIPS, Factors & Rebalancing Package
 Exports:
+- FactorRiskModelEngine, ActiveRiskDecomposition, FactorExposure (Multi-Factor & FLAM)
 - PortfolioRebalancingEngine, RebalancingBlotter, TradeOrder
 - BlackLittermanEngine (Implied Equilibrium & Subjective View Blending)
 - GipsCompositeEngine (GIPS Compliance, TWRR, Modified Dietz & Composite Dispersion)
@@ -12,6 +13,11 @@ Exports:
 - VolatilitySurfaceEngine (SVI & Local Volatility Modeling)
 """
 
+from cfa_quant.portfolio_risk.factor_risk_model import (
+    FactorRiskModelEngine,
+    ActiveRiskDecomposition,
+    FactorExposure
+)
 from cfa_quant.portfolio_risk.rebalancing_engine import (
     PortfolioRebalancingEngine,
     RebalancingBlotter,
@@ -30,6 +36,9 @@ from cfa_quant.fixed_income_ldi import FixedIncomeLdiEngine
 from cfa_quant.volatility_surface import VolatilitySurfaceEngine
 
 __all__ = [
+    "FactorRiskModelEngine",
+    "ActiveRiskDecomposition",
+    "FactorExposure",
     "PortfolioRebalancingEngine",
     "RebalancingBlotter",
     "TradeOrder",
