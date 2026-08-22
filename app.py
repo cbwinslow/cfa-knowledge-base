@@ -17,6 +17,7 @@ from cfa_quant.charting import FinancialChartEngine
 from cfa_quant.volatility_surface import VolatilitySurfaceEngine
 from cfa_quant.excel_exporter import ExcelModelExporter
 from cfa_quant.ips_generator import IpsGeneratorEngine, ClientProfile
+from cfa_quant.lifecycle_portfolio import LifeCyclePortfolioEngine, LifeCycleClient
 from cfa_quant.tax_legal_engine import TaxLegalOptimizationEngine, AccountBalances
 from cfa_quant.fixed_income_ldi import FixedIncomeLdiEngine, BondAsset, LiabilityObligation
 from pipeline.sec_edgar_client import SecEdgarClient
@@ -51,7 +52,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
     "🛡️ Fixed Income LDI",
     "🎯 Opportunity Cost & EVA",
     "👥 Peer Comps & DuPont 5-Way",
-    "📝 IPS Generator (L3)",
+    "📝 IPS & Life-Cycle Glidepath",
     "⚖️ Tax & Legal Wealth Alpha",
     "🌐 Macro & Yield Curve",
     "📚 CFA Knowledge Base"
@@ -254,7 +255,6 @@ with tab4:
         
         st.info(f"**Contingent Status:** {imm_res.contingent_immunization_status}")
         
-        # Yield Curve Shocks Table
         st.subheader("⚡ Non-Parallel Yield Curve Stress Test")
         shock_rows = []
         for s_type in ["Parallel +100bps", "Parallel -100bps", "Steepening", "Flattening", "Positive Butterfly"]:
@@ -316,37 +316,74 @@ with tab4:
                 df_peers = pd.DataFrame(peer_comp["peer_data"])
                 st.dataframe(df_peers, use_container_width=True)
 
-# ------------------ TAB 7: IPS GENERATOR (CFA LEVEL III) ------------------
+# ------------------ TAB 7: IPS & LIFE-CYCLE GLIDEPATH (CFA LEVEL III) ------------------
 with tab7:
-    st.header("📝 Institutional Investment Policy Statement (IPS) Generator")
-    st.caption("Constructs an audit-ready, institutional IPS following CFA Level III Private Wealth standards.")
+    st.header("📝 Institutional Investment Policy Statement (IPS) & Life-Cycle Glidepath")
+    st.caption("Constructs an audit-ready, institutional IPS and dynamic age-based asset allocation glidepath.")
     
     with st.form("ips_form"):
         col_c1, col_c2 = st.columns(2)
         with col_c1:
             client_name = st.text_input("Client / Family Names", value="Dr. & Mrs. Alexander Wright")
-            client_ages = st.text_input("Client Ages (comma separated)", value="56, 54")
+            client_age = st.number_input("Primary Investor Age", min_value=18, max_value=95, value=48, step=1)
+            spouse_age = st.number_input("Spouse Age (Optional)", min_value=18, max_value=95, value=46, step=1)
             jurisdiction = st.selectbox("Residency / Tax Jurisdiction", ["United States (Tax-Exempt State: FL/TX/NV/WY)", "United States (California / High-Tax)", "United States (New York / High-Tax)", "United Kingdom (Non-Dom / Remittance)", "Switzerland (Lump-Sum)", "Puerto Rico (Act 60)"])
-            investable_assets = st.number_input("Total Investable Assets ($)", min_value=100000.0, value=8500000.0, step=250000.0)
-            annual_spending = st.number_input("Annual Living Expenses / Spending ($)", min_value=10000.0, value=280000.0, step=10000.0)
+            investable_assets = st.number_input("Total Investable Financial Assets ($)", min_value=100000.0, value=6500000.0, step=250000.0)
+            annual_spending = st.number_input("Annual Living Expenses / Spending ($)", min_value=10000.0, value=250000.0, step=10000.0)
         with col_c2:
-            human_cap_val = st.number_input("Human Capital Present Value ($)", value=3500000.0, step=100000.0)
-            human_cap_type = st.selectbox("Human Capital Character", ["bond_like (Low Career Volatility)", "equity_like (High Commission / Startup)"])
-            bequest_goal = st.number_input("Bequest / Legacy Target ($)", value=4000000.0, step=250000.0)
-            risk_willing = st.selectbox("Subjective Risk Willingness", ["Above Average", "Moderate", "High", "Below Average"])
+            employment_income = st.number_input("Annual Employment / Business Income ($)", min_value=0.0, value=450000.0, step=25000.0)
+            human_cap_type = st.selectbox("Human Capital Character", ["bond_like (Low Career Volatility / Physician / Govt)", "equity_like (High Commission / Startup Founder)"])
+            bequest_goal = st.number_input("Bequest / Legacy Target ($)", value=3000000.0, step=250000.0)
+            risk_willing = st.selectbox("Subjective Risk Willingness", ["Aggressive", "Growth", "Moderate", "Conservative"])
             
-        submit_ips = st.form_submit_button("🚀 Generate Audit-Ready IPS Document")
+        submit_ips = st.form_submit_button("🚀 Generate Institutional IPS & Age-Based Glidepath")
         
     if submit_ips:
-        ages_list = [int(a.strip()) for a in client_ages.split(",") if a.strip().isdigit()]
+        h_type = "bond_like" if "bond_like" in human_cap_type else "equity_like"
+        lc_client = LifeCycleClient(
+            client_name=client_name,
+            current_age=client_age,
+            annual_employment_income=employment_income,
+            human_capital_type=h_type,
+            annual_living_expenses=annual_spending,
+            current_financial_assets=investable_assets,
+            bequest_target_usd=bequest_goal,
+            risk_willingness=risk_willing
+        )
+        
+        lc_engine = LifeCyclePortfolioEngine()
+        lc_profile = lc_engine.generate_lifecycle_profile(lc_client)
+        df_glidepath = lc_engine.generate_glidepath_trajectory(lc_client)
+        
+        st.subheader("📊 Holistic Economic Net Worth & SAA Glidepath")
+        w1, w2, w3, w4 = st.columns(4)
+        w1.metric("Financial Assets", f"${lc_profile.financial_capital:,.2f}")
+        w2.metric("Human Capital PV", f"${lc_profile.human_capital_pv:,.2f}", f"{lc_profile.human_capital_pct_of_wealth:.1f}% of Total")
+        w3.metric("Total Economic Net Worth", f"${lc_profile.total_economic_net_worth:,.2f}")
+        w4.metric("Recommended SAA", f"{lc_profile.recommended_equity_pct:.0f}% Equity / {lc_profile.recommended_fixed_income_pct:.0f}% FI")
+        
+        # Interactive Area Chart Glidepath
+        fig_glide = lc_engine.render_glidepath_figure(df_glidepath, client_name)
+        st.plotly_chart(fig_glide, use_container_width=True)
+        
+        # Goals-Based Buckets
+        st.subheader("🎯 Goals-Based Wealth Management (GBWM) Decomposition")
+        gb = lc_profile.goals_based_buckets
+        gb1, gb2, gb3 = st.columns(3)
+        gb1.metric("1. Lifestyle Protection Bucket", f"${gb.lifestyle_protection_usd:,.2f}", f"{gb.lifestyle_protection_pct:.1f}% of Portfolio")
+        gb2.metric("2. Aspirational Growth Bucket", f"${gb.aspirational_growth_usd:,.2f}", f"{gb.aspirational_growth_pct:.1f}% of Portfolio")
+        gb3.metric("3. Legacy & Bequest Bucket", f"${gb.legacy_bequest_usd:,.2f}", f"{gb.legacy_bequest_pct:.1f}% of Portfolio")
+        
+        st.markdown("---")
+        
         profile = ClientProfile(
             client_names=client_name,
-            ages=ages_list or [55],
+            ages=[client_age, spouse_age],
             residence_jurisdiction=jurisdiction,
             total_investable_assets=investable_assets,
             annual_spending_needs=annual_spending,
-            human_capital_value=human_cap_val,
-            human_capital_type="bond_like" if "bond_like" in human_cap_type else "equity_like",
+            human_capital_value=lc_profile.human_capital_pv,
+            human_capital_type=h_type,
             bequest_legacy_goal=bequest_goal,
             risk_willingness=risk_willing
         )
@@ -354,7 +391,7 @@ with tab7:
         ips_doc = ips_eng.generate_full_ips_document(profile)
         st.success("✓ Investment Policy Statement successfully compiled!")
         st.markdown(ips_doc)
-        st.download_button("📥 Download IPS Document (.md)", ips_doc, file_name=f"IPS_{client_name.replace(' ', '_')}.md", mime="text/markdown")
+        st.download_button("📥 Download Full IPS Document (.md)", ips_doc, file_name=f"IPS_{client_name.replace(' ', '_')}.md", mime="text/markdown")
 
 # ------------------ TAB 8: TAX & LEGAL WEALTH ALPHA ------------------
 with tab8:

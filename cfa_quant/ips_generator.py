@@ -1,16 +1,29 @@
 """
-Institutional Investment Policy Statement (IPS) Generator
-Constructs CFA Level III compliant Investment Policy Statements with:
-1. Executive Summary & Family Governance Profile
+Institutional Investment Policy Statement (IPS) Generator - CFA Level III Standards
+Constructs comprehensive, audit-ready Investment Policy Statements with:
+1. Executive Summary & Holistic Economic Balance Sheet (Financial Capital + Human Capital)
 2. Return Objective (Spending Rate + Inflation + Real Growth, Pre-Tax & After-Tax)
-3. Risk Objective (Ability vs. Willingness Assessment)
+3. Risk Objective (Ability vs. Willingness Assessment & Binding Constraints)
 4. Comprehensive Constraints (TTLLU: Time Horizon, Tax, Liquidity, Legal, Unique)
-5. Strategic Asset Allocation (SAA) Targets & Rebalancing Corridors
+5. Life-Cycle Stage Analysis & Age-Based Glidepath SAA
+6. Goals-Based Wealth Management (GBWM) Sub-Portfolio Decomposition:
+   - Lifestyle Protection Bucket
+   - Aspirational Growth Bucket
+   - Intergenerational Legacy / Bequest Bucket
+7. Strategic Asset Allocation (SAA) Targets & Rebalancing Corridors
 """
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Any, Optional
 import json
+
+try:
+    from .lifecycle_portfolio import LifeCyclePortfolioEngine, LifeCycleClient
+except ImportError:
+    try:
+        from cfa_quant.lifecycle_portfolio import LifeCyclePortfolioEngine, LifeCycleClient
+    except ImportError:
+        from lifecycle_portfolio import LifeCyclePortfolioEngine, LifeCycleClient
 
 @dataclass
 class ClientProfile:
@@ -27,7 +40,7 @@ class ClientProfile:
     human_capital_type: str = "bond_like"  # 'bond_like' or 'equity_like'
     
     # Risk Profile
-    risk_willingness: str = "Moderate"  # 'Low', 'Moderate', 'Above Average', 'High'
+    risk_willingness: str = "Moderate"  # 'Conservative', 'Moderate', 'Growth', 'Aggressive'
     
     # TTLLU Constraints
     time_horizon_stages: List[str] = field(default_factory=lambda: ["Stage 1: Accumulation (7 years)", "Stage 2: Active Retirement (20+ years)"])
@@ -37,8 +50,9 @@ class ClientProfile:
     unique_mandates: List[str] = field(default_factory=lambda: ["ESG Screening", "Concentrated Position Risk Mitigation"])
 
 class IpsGeneratorEngine:
-    def __init__(self):
-        pass
+    def __init__(self, risk_free_rate: float = 0.045):
+        self.rf = risk_free_rate
+        self.lifecycle_engine = LifeCyclePortfolioEngine(risk_free_rate=risk_free_rate)
 
     def calculate_return_objective(self, profile: ClientProfile) -> Dict[str, Any]:
         """
@@ -50,9 +64,7 @@ class IpsGeneratorEngine:
         """
         spending_rate = profile.annual_spending_needs / max(profile.total_investable_assets, 1.0)
         
-        # Real capital growth target (to preserve principal and grow bequest)
         real_growth_target = 0.010 if profile.bequest_legacy_goal > 0 else 0.005
-        
         after_tax_real_return = spending_rate + real_growth_target
         after_tax_nominal_return = ((1.0 + after_tax_real_return) * (1.0 + profile.expected_inflation_rate)) - 1.0
         pre_tax_nominal_return = after_tax_nominal_return / (1.0 - profile.effective_income_tax_rate)
@@ -72,22 +84,21 @@ class IpsGeneratorEngine:
         - Willingness: Subjective investor risk tolerance.
         - Overall: Constrained by min(Ability, Willingness).
         """
-        # Quantitative Ability Score
         spending_ratio = profile.annual_spending_needs / max(profile.total_investable_assets, 1.0)
+        primary_age = profile.ages[0] if profile.ages else 50
         
         if spending_ratio < 0.035 and profile.human_capital_type == "bond_like":
-            ability = "Above Average"
-            ability_rationale = "Low spending rate (<3.5%), secure bond-like human capital, and robust asset cushion relative to liabilities."
+            ability = "Aggressive" if primary_age < 45 else "Growth"
+            ability_rationale = f"Low spending rate ({spending_ratio*100:.1f}%), secure bond-like human capital, and long investment horizon."
         elif spending_ratio < 0.055:
             ability = "Moderate"
-            ability_rationale = "Moderate spending rate (3.5%-5.5%) with sufficient runway for intermediate market volatility."
+            ability_rationale = f"Moderate spending rate ({spending_ratio*100:.1f}%) with solid buffer for market volatility."
         else:
-            ability = "Below Average"
-            ability_rationale = "High spending rate (>5.5%) or near-term liquidity calls significantly limit risk absorption capacity."
+            ability = "Conservative"
+            ability_rationale = f"High spending rate ({spending_ratio*100:.1f}%) requires capital preservation focus."
             
-        # Hierarchy: Overall risk tolerance cannot exceed the lower of Ability and Willingness
-        risk_rank = {"Below Average": 1, "Low": 1, "Moderate": 2, "Above Average": 3, "High": 4}
-        inv_rank = {1: "Below Average", 2: "Moderate", 3: "Above Average", 4: "High"}
+        risk_rank = {"Conservative": 1, "Below Average": 1, "Moderate": 2, "Growth": 3, "Above Average": 3, "Aggressive": 4, "High": 4}
+        inv_rank = {1: "Conservative", 2: "Moderate", 3: "Growth", 4: "Aggressive"}
         
         ability_val = risk_rank.get(ability, 2)
         willingness_val = risk_rank.get(profile.risk_willingness, 2)
@@ -102,41 +113,25 @@ class IpsGeneratorEngine:
             "binding_constraint": "Willingness" if willingness_val < ability_val else ("Ability" if ability_val < willingness_val else "Aligned")
         }
 
-    def generate_strategic_asset_allocation(self, overall_risk_tolerance: str) -> Dict[str, Any]:
-        """
-        Assigns target SAA weights and rebalancing corridors based on overall risk tolerance.
-        """
-        allocations = {
-            "High": {
-                "Global Equities": {"target": 0.75, "corridor": [0.70, 0.80]},
-                "Fixed Income & Cash": {"target": 0.15, "corridor": [0.10, 0.20]},
-                "Alternative Assets / Real Estate": {"target": 0.10, "corridor": [0.06, 0.14]}
-            },
-            "Above Average": {
-                "Global Equities": {"target": 0.65, "corridor": [0.60, 0.70]},
-                "Fixed Income & Cash": {"target": 0.25, "corridor": [0.20, 0.30]},
-                "Alternative Assets / Real Estate": {"target": 0.10, "corridor": [0.06, 0.14]}
-            },
-            "Moderate": {
-                "Global Equities": {"target": 0.50, "corridor": [0.45, 0.55]},
-                "Fixed Income & Cash": {"target": 0.40, "corridor": [0.35, 0.45]},
-                "Alternative Assets / Real Estate": {"target": 0.10, "corridor": [0.06, 0.14]}
-            },
-            "Below Average": {
-                "Global Equities": {"target": 0.30, "corridor": [0.25, 0.35]},
-                "Fixed Income & Cash": {"target": 0.60, "corridor": [0.55, 0.65]},
-                "Alternative Assets / Real Estate": {"target": 0.10, "corridor": [0.05, 0.15]}
-            }
-        }
-        return allocations.get(overall_risk_tolerance, allocations["Moderate"])
-
     def generate_full_ips_document(self, profile: ClientProfile) -> str:
         """
         Generates a comprehensive, audit-ready Investment Policy Statement document in Markdown.
         """
         returns = self.calculate_return_objective(profile)
         risk = self.evaluate_risk_objective(profile)
-        saa = self.generate_strategic_asset_allocation(risk["overall_risk_tolerance"])
+        
+        primary_age = profile.ages[0] if profile.ages else 50
+        lc_client = LifeCycleClient(
+            client_name=profile.client_names,
+            current_age=primary_age,
+            human_capital_type=profile.human_capital_type,
+            annual_living_expenses=profile.annual_spending_needs,
+            current_financial_assets=profile.total_investable_assets,
+            bequest_target_usd=profile.bequest_legacy_goal,
+            risk_willingness=risk["overall_risk_tolerance"]
+        )
+        
+        lc_profile = self.lifecycle_engine.generate_lifecycle_profile(lc_client)
         
         monthly_burn = profile.annual_spending_needs / 12.0
         emergency_reserve = monthly_burn * profile.liquidity_buffer_months
@@ -149,11 +144,14 @@ class IpsGeneratorEngine:
 
 ---
 
-## 1. Executive Summary & Family Governance Profile
-- **Total Investable Assets:** ${profile.total_investable_assets:,.2f}
+## 1. Executive Summary & Holistic Economic Balance Sheet
+- **Total Investable Financial Capital:** ${profile.total_investable_assets:,.2f}
+- **Human Capital Present Value (PV):** ${lc_profile.human_capital_pv:,.2f} ({profile.human_capital_type.replace('_', ' ').title()})
+- **Total Economic Net Worth:** **${lc_profile.total_economic_net_worth:,.2f}**
+- **Human Capital Share of Total Wealth:** {lc_profile.human_capital_pct_of_wealth:.1f}%
 - **Client Ages:** {', '.join(map(str, profile.ages))}
-- **Human Capital Asset Valuation:** ${profile.human_capital_value:,.2f} ({profile.human_capital_type.replace('_', ' ').title()})
-- **Bequest / Legacy Target:** ${profile.bequest_legacy_goal:,.2f}
+- **Life-Cycle Phase:** **{lc_profile.stage_name}** ({lc_profile.life_cycle_phase})
+- **Bequest / Intergenerational Legacy Target:** ${profile.bequest_legacy_goal:,.2f}
 
 ---
 
@@ -176,11 +174,23 @@ The investment portfolio must generate sufficient cash flow to cover annual livi
 
 ---
 
-## 4. Investment Constraints (TTLLU Framework)
+## 4. Goals-Based Wealth Management (GBWM) Sub-Portfolios
+
+To optimize behavioral comfort and align cash flows with distinct liabilities, the investable wealth is partitioned into three discrete sub-portfolios:
+
+| Goals-Based Sub-Portfolio | Target Dollar Amount | % of Portfolio | Primary Objective & Asset Implementation |
+| :--- | :--- | :--- | :--- |
+| **1. Lifestyle Protection Bucket** | **${lc_profile.goals_based_buckets.lifestyle_protection_usd:,.2f}** | **{lc_profile.goals_based_buckets.lifestyle_protection_pct:.1f}%** | 100% Capital Solvency & Essential Needs (Cash, Short Treasuries, TIPS & LDI Fixed Income) |
+| **2. Aspirational Wealth Bucket** | **${lc_profile.goals_based_buckets.aspirational_growth_usd:,.2f}** | **{lc_profile.goals_based_buckets.aspirational_growth_pct:.1f}%** | Long-Term Capital Expansion (Global Large/Mid Equities & Private Capital) |
+| **3. Legacy & Philanthropy Bucket**| **${lc_profile.goals_based_buckets.legacy_bequest_usd:,.2f}** | **{lc_profile.goals_based_buckets.legacy_bequest_pct:.1f}%** | Intergenerational Transfer & DAFs (Multi-Gen Compounders & Real Estate) |
+
+---
+
+## 5. Investment Constraints (TTLLU Framework)
 
 ### A. Time Horizon
-- **Structure:** Multi-Stage Horizon
-- **Stages:**
+- **Structure:** Multi-Stage Life Horizon ({lc_profile.time_horizon_years} Years Total Expected Runway)
+- **Life-Cycle Stages:**
 """
         for s in profile.time_horizon_stages:
             ips_md += f"  - {s}\n"
@@ -188,7 +198,10 @@ The investment portfolio must generate sufficient cash flow to cover annual livi
         ips_md += f"""
 ### B. Tax Considerations
 - **Income Tax Rate:** {profile.effective_income_tax_rate*100:.1f}% | **Capital Gains Tax Rate:** {profile.capital_gains_tax_rate*100:.1f}%
-- **Asset Location Policy:** High turnover and fixed income assets located in tax-deferred/exempt accounts; high-growth, buy-and-hold equities located in taxable accounts.
+- **Asset Location Strategy:** 
+  - *Taxable Accounts:* High-growth, low-turnover equities and municipal bonds.
+  - *Tax-Deferred (Traditional 401k/IRA):* Taxable fixed income, REITs, and high-turnover strategies.
+  - *Tax-Exempt (Roth):* Highest expected return equities and venture assets for maximum tax-free compounding.
 
 ### C. Liquidity Requirements
 - **Immediate Liquidity Buffer:** **${emergency_reserve:,.2f}** ({profile.liquidity_buffer_months} months of operating expenses held in cash equivalents / Treasury Bills).
@@ -209,16 +222,15 @@ The investment portfolio must generate sufficient cash flow to cover annual livi
         ips_md += f"""
 ---
 
-## 5. Strategic Asset Allocation (SAA) & Rebalancing Policy
+## 6. Strategic Asset Allocation (SAA) Glidepath & Rebalancing Corridors
 
-| Asset Class | Target Allocation | Rebalancing Corridor |
-| :--- | :--- | :--- |
-"""
-        for asset, data in saa.items():
-            ips_md += f"| **{asset}** | **{data['target']*100:.1f}%** | [{data['corridor'][0]*100:.1f}%, {data['corridor'][1]*100:.1f}%] |\n"
+| Asset Class | Target Allocation | Rebalancing Corridor | Fiduciary Role |
+| :--- | :--- | :--- | :--- |
+| **Global Equities** | **{lc_profile.recommended_equity_pct:.1f}%** | [{max(0.0, lc_profile.recommended_equity_pct-5.0):.1f}%, {min(100.0, lc_profile.recommended_equity_pct+5.0):.1f}%] | Purchasing Power Growth & Real Return |
+| **Fixed Income & LDI** | **{lc_profile.recommended_fixed_income_pct:.1f}%** | [{max(0.0, lc_profile.recommended_fixed_income_pct-5.0):.1f}%, {min(100.0, lc_profile.recommended_fixed_income_pct+5.0):.1f}%] | Deflation Hedge, Volatility Dampening & Cash Flow Matching |
+| **Alternative Assets / Real Estate** | **{lc_profile.recommended_alternatives_pct:.1f}%** | [{max(0.0, lc_profile.recommended_alternatives_pct-4.0):.1f}%, {min(100.0, lc_profile.recommended_alternatives_pct+4.0):.1f}%] | Inflation Hedge & Uncorrelated Diversifier |
 
-        ips_md += """
-- **Rebalancing Rules:** Portfolio is monitored quarterly and rebalanced whenever any asset class breaches its upper or lower corridor band.
+- **Rebalancing Rules:** Portfolio is reviewed quarterly and rebalanced whenever any major asset class breaches its corridor boundary, utilizing cash flow distributions to rebalance without triggering unnecessary taxable capital gains.
 """
         return ips_md
 
@@ -235,7 +247,7 @@ if __name__ == "__main__":
         bequest_legacy_goal=3000000.0,
         human_capital_value=3200000.0,
         human_capital_type="bond_like",
-        risk_willingness="Above Average"
+        risk_willingness="Growth"
     )
     
     gen = IpsGeneratorEngine()
@@ -243,4 +255,4 @@ if __name__ == "__main__":
     print("=" * 75)
     print("Generated CFA Level III Investment Policy Statement (IPS):")
     print("=" * 75)
-    print(ips_text[:1200] + "\n... [Document truncated for preview] ...")
+    print(ips_text[:1400] + "\n... [Document truncated for preview] ...")
