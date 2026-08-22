@@ -1,0 +1,37 @@
+[
+  {
+    "topic": "Inventory Valuation & Cost Flow",
+    "us_gaap": "Permits LIFO, FIFO, and Weighted Average Cost. LIFO conformity rule requires LIFO for financial reporting if used for tax.",
+    "ifrs": "Strictly PROHIBITS LIFO (IAS 2). Only FIFO and Weighted Average Cost are permitted.",
+    "analytical_adjustment": "To compare a US GAAP (LIFO) firm to an IFRS (FIFO) peer: 1) Add LIFO Reserve to reported Inventory; 2) Add change in LIFO Reserve to COGS; 3) Adjust retained earnings for cumulative deferred taxes.",
+    "cfa_level": "Level II Financial Statement Analysis"
+  },
+  {
+    "topic": "Asset Impairment & Reversals",
+    "us_gaap": "Two-step test: 1) Recoverability test (undiscounted cash flows < carrying value); 2) Loss = Carrying value - Fair value. Reversals of impairment losses are STRICTLY PROHIBITED.",
+    "ifrs": "One-step test (IAS 36): Loss = Carrying value - Recoverable amount (higher of Fair Value less costs to sell and Value in Use). REVERSALS of impairment losses are PERMITTED if economic conditions improve (except for goodwill).",
+    "analytical_adjustment": "IFRS firms will exhibit more earnings volatility around economic recoveries due to impairment reversals.",
+    "cfa_level": "Level II Financial Statement Analysis"
+  },
+  {
+    "topic": "Research & Development Costs",
+    "us_gaap": "All Research and Development expenditures must be EXPENSED immediately as incurred (with narrow exceptions for software developed for internal use/sale after technological feasibility).",
+    "ifrs": "Research costs are EXPENSED. Development costs MUST BE CAPITALIZED as intangible assets once specific criteria are met (technical feasibility, intent to complete, probable future economic benefits - IAS 38).",
+    "analytical_adjustment": "IFRS firms report higher operating income and higher CFO (reclassified to CFI as CapEx) relative to US GAAP peers in heavy R&D industries.",
+    "cfa_level": "Level II Financial Statement Analysis"
+  },
+  {
+    "topic": "Statement of Cash Flows: Interest & Dividends",
+    "us_gaap": "Interest Received (Operating), Interest Paid (Operating), Dividends Received (Operating), Dividends Paid (Financing).",
+    "ifrs": "Flexibility permitted (IAS 7): Interest/Dividends Paid can be Operating or Financing; Interest/Dividends Received can be Operating or Investing (provided classification is applied consistently).",
+    "analytical_adjustment": "Reclassify Interest Paid to Financing Cash Flow under IFRS to standardize CFO across US and European companies.",
+    "cfa_level": "Level I & II Financial Statement Analysis"
+  },
+  {
+    "topic": "Lease Accounting (ASC 842 vs IFRS 16)",
+    "us_gaap": "Dual classification for lessees: Operating Leases (single lease expense on straight-line basis in EBIT) and Finance Leases (front-loaded interest + amortization).",
+    "ifrs": "Single lessee model (IFRS 16): ALL leases treated as finance leases (Right-of-Use Asset + Lease Liability), front-loading expense and splitting between Depreciation and Interest.",
+    "analytical_adjustment": "US GAAP operating leases report lower EBITDA than identical IFRS leases because operating lease expense reduces EBITDA, whereas IFRS splits it below EBITDA (Depreciation + Interest).",
+    "cfa_level": "Level II Financial Statement Analysis"
+  }
+]

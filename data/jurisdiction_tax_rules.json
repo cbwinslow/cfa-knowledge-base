@@ -1,0 +1,66 @@
+{
+  "us_federal": {
+    "ordinary_income_brackets_2026": [
+      {"bracket": "10%", "single_threshold": 11600, "mfj_threshold": 23200},
+      {"bracket": "12%", "single_threshold": 47150, "mfj_threshold": 94300},
+      {"bracket": "22%", "single_threshold": 100525, "mfj_threshold": 201050},
+      {"bracket": "24%", "single_threshold": 191950, "mfj_threshold": 383900},
+      {"bracket": "32%", "single_threshold": 243725, "mfj_threshold": 487450},
+      {"bracket": "35%", "single_threshold": 609350, "mfj_threshold": 731200},
+      {"bracket": "37%", "single_threshold": 609351, "mfj_threshold": 731201}
+    ],
+    "long_term_capital_gains_brackets": [
+      {"rate": "0%", "single_threshold": 47025, "mfj_threshold": 94050},
+      {"rate": "15%", "single_threshold": 518900, "mfj_threshold": 583750},
+      {"rate": "20%", "single_threshold": 518901, "mfj_threshold": 583751}
+    ],
+    "net_investment_income_tax_niit": 0.038,
+    "estate_lifetime_exemption_2026": 13610000.0,
+    "top_estate_tax_rate": 0.40,
+    "step_up_in_basis": true
+  },
+  "us_states_summary": {
+    "zero_income_tax_states": ["Florida", "Texas", "Nevada", "Wyoming", "Washington", "Tennessee", "South Dakota", "Alaska", "New Hampshire"],
+    "high_tax_states": {
+      "California": {"top_income_tax": 0.133, "capital_gains_tax": 0.133, "estate_tax": 0.0},
+      "New York": {"top_income_tax": 0.109, "capital_gains_tax": 0.109, "estate_tax": 0.16, "nyc_local_tax": 0.03876},
+      "New Jersey": {"top_income_tax": 0.1075, "capital_gains_tax": 0.1075, "inheritance_tax": true},
+      "Massachusetts": {"top_income_tax": 0.090, "capital_gains_tax": 0.090, "estate_tax": 0.16}
+    }
+  },
+  "global_wealth_jurisdictions": {
+    "United States - Puerto Rico (Act 60)": {
+      "corporate_tax": 0.04,
+      "capital_gains_tax": 0.00,
+      "dividend_tax": 0.00,
+      "us_citizenship_retained": true,
+      "residency_rule": "183 days presence + bona fide resident test"
+    },
+    "United Arab Emirates (Dubai / Abu Dhabi)": {
+      "personal_income_tax": 0.00,
+      "capital_gains_tax": 0.00,
+      "corporate_tax": 0.09,
+      "inheritance_tax": 0.00,
+      "residency_rule": "Golden Visa (AED 2M property or investment)"
+    },
+    "Singapore": {
+      "personal_income_tax_top": 0.24,
+      "capital_gains_tax": 0.00,
+      "dividend_tax": 0.00,
+      "estate_tax": 0.00,
+      "tax_system": "Territorial (foreign income generally exempt)"
+    },
+    "Switzerland (Lump-Sum Forfait)": {
+      "personal_income_tax": "Negotiated based on worldwide living expenses (min CHF 400,000 base)",
+      "capital_gains_tax": 0.00,
+      "wealth_tax": 0.003,
+      "residency_rule": "Non-working residents subject to cantonal approval"
+    },
+    "United Kingdom (FIG / Non-Dom Reform)": {
+      "foreign_income_gains_fig": "4-year exemption for new arrivals, followed by worldwide taxation",
+      "top_income_tax": 0.45,
+      "capital_gains_tax": 0.20,
+      "inheritance_tax": 0.40
+    }
+  }
+}
