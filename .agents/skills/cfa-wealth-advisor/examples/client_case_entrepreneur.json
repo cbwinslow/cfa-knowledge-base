@@ -1,0 +1,38 @@
+{
+  "client_profile": {
+    "client_names": "Marcus & Sophia Vance",
+    "ages": [48, 46],
+    "family_status": "Married with two children (Ages 16 and 14)",
+    "residence": "Austin, Texas (Zero State Income Tax)",
+    "total_investable_assets": 12500000.0,
+    "annual_spending_needs": 350000.0,
+    "expected_inflation_rate": 0.028,
+    "effective_income_tax_rate": 0.32,
+    "capital_gains_tax_rate": 0.20,
+    "bequest_legacy_goal": 5000000.0,
+    "human_capital_value": 4500000.0,
+    "human_capital_type": "equity_like",
+    "human_capital_notes": "Marcus is founder of a B2B SaaS startup (Fintech). Cash flow is volatile.",
+    "risk_willingness": "High",
+    "time_horizon_stages": [
+      "Stage 1: Pre-Liquidity Event & High School Education (4 years)",
+      "Stage 2: Post-Exit / College Funding & Active Wealth Growth (15 years)",
+      "Stage 3: Wealth Decumulation & Multi-Generational Transfer (25+ years)"
+    ],
+    "liquidity_requirements": {
+      "emergency_cash_months": 18,
+      "planned_lump_sum_calls": [
+        {"purpose": "College Tuition Trust Fund", "amount": 600000.0, "timeframe_years": 2}
+      ]
+    },
+    "legal_and_tax_structures": [
+      "Revocable Family Living Trust",
+      "Spousal Lifetime Access Trust (SLAT) for estate tax exemption sheltering",
+      "Texas LLC for angel investment holdings"
+    ],
+    "unique_mandates": [
+      "Strict restriction: Maximum 5% allocation to enterprise software/fintech to avoid correlation with Marcus's primary business",
+      "Philanthropic Donor-Advised Fund (DAF) commitment: $50,000/year"
+    ]
+  }
+}
