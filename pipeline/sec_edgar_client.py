@@ -7,6 +7,7 @@ Fetches point-in-time XBRL 10-K and 10-Q financial statement facts directly from
 import json
 import urllib.request
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
 
@@ -62,16 +63,13 @@ class SecEdgarClient:
                 data = json.loads(resp.read().decode("utf-8"))
             with open(cache_file, "w") as f:
                 json.dump(data, f)
-            time.sleep(0.15)  # Respect SEC rate limit (max 10 req/sec)
+            time.sleep(0.15)
             return data
         except Exception as e:
             print(f"Error fetching facts for CIK {cik} ({ticker}): {e}")
             return None
 
     def extract_annual_series(self, facts: Dict[str, Any], tag: str, taxonomy: str = "us-gaap") -> Dict[int, Dict[str, Any]]:
-        """
-        Extracts annual (10-K) series for a given XBRL tag, recording both period year and filing date (point-in-time).
-        """
         try:
             items = facts["facts"][taxonomy][tag]["units"]["USD"]
         except KeyError:
@@ -80,34 +78,41 @@ class SecEdgarClient:
         annual = {}
         for item in items:
             form = item.get("form")
-            # Filter for 10-K annual filings with full year duration (or frame CY)
             if form == "10-K":
                 fy = item.get("fy")
-                fp = item.get("fp")
                 val = item.get("val")
                 filed = item.get("filed")
+                start = item.get("start")
                 end = item.get("end")
                 
-                if fy and val is not None and (fp in ["FY", "Y"] or "CY" in str(item.get("frame", ""))):
-                    annual[fy] = {
-                        "value": float(val),
-                        "filed_date": filed,
-                        "period_end": end,
-                        "tag": tag
-                    }
+                # Check for full 12-month annual duration (>= 300 days) or instantaneous balance sheet items
+                duration_days = 365
+                if start and end:
+                    try:
+                        d_start = datetime.strptime(start, "%Y-%m-%d")
+                        d_end = datetime.strptime(end, "%Y-%m-%d")
+                        duration_days = (d_end - d_start).days
+                    except Exception:
+                        pass
+                
+                if fy and val is not None and (duration_days >= 300 or start is None):
+                    # Keep latest filed record or largest valid 12M value for that fiscal year
+                    if fy not in annual or filed > annual[fy]["filed_date"] or val > annual[fy]["value"]:
+                        annual[fy] = {
+                            "value": float(val),
+                            "filed_date": filed,
+                            "period_end": end,
+                            "tag": tag
+                        }
         return annual
 
     def get_financial_history(self, ticker: str) -> Optional[Dict[str, Any]]:
-        """
-        Parses full 3-statement financial items across recent fiscal years.
-        """
         facts = self.get_company_facts(ticker)
         if not facts:
             return None
 
-        # Standard US-GAAP Tag Mappings
         tags = {
-            "revenue": ["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax", "SalesRevenueNet"],
+            "revenue": ["RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues", "SalesRevenueNet", "SalesRevenueGoodsNet"],
             "cost_of_revenue": ["CostOfGoodsAndServicesSold", "CostOfRevenue"],
             "gross_profit": ["GrossProfit"],
             "operating_income": ["OperatingIncomeLoss"],
@@ -135,7 +140,7 @@ class SecEdgarClient:
                     for fy, data in series.items():
                         if fy not in history:
                             history[fy] = {"fiscal_year": fy, "filing_date": data["filed_date"]}
-                        if metric not in history[fy]:
+                        if metric not in history[fy] or history[fy][metric] == 0:
                             history[fy][metric] = data["value"]
                     break
 
@@ -150,14 +155,8 @@ class SecEdgarClient:
 
 if __name__ == "__main__":
     client = SecEdgarClient()
-    print("Testing SEC EDGAR Client with AAPL...")
-    data = client.get_financial_history("AAPL")
+    data = client.get_financial_history("MSFT")
     if data:
-        print(f"Company: {data['entity_name']} | Years available: {data['years']}")
         latest = data["statements"][-1]
-        print(f"Latest Fiscal Year ({latest['fiscal_year']}):")
-        print(f"  Revenue: ${latest.get('revenue', 0):,.0f}")
-        print(f"  Operating Income (EBIT): ${latest.get('operating_income', 0):,.0f}")
-        print(f"  Net Income: ${latest.get('net_income', 0):,.0f}")
-        print(f"  Operating Cash Flow: ${latest.get('operating_cash_flow', 0):,.0f}")
-        print(f"  CapEx: ${latest.get('capex', 0):,.0f}")
+        print(f"MSFT FY{latest['fiscal_year']} Revenue: ${latest.get('revenue', 0):,.0f}")
+        print(f"MSFT FY{latest['fiscal_year']} Operating Income: ${latest.get('operating_income', 0):,.0f}")
