@@ -23,6 +23,7 @@ from capm_sml_model import CapmSmlModel
 from cfa_valuation_engine import CfaValuationEngine
 from forensic_accounting import ForensicAccountingEngine
 from db_storage import init_valuation_db, save_company_valuation
+from cfa_quant.excel_exporter import ExcelModelExporter
 
 def run_valuation_for_ticker(ticker: str, growth_stage1: float = 0.08):
     ticker = ticker.upper()
@@ -219,6 +220,31 @@ def run_valuation_for_ticker(ticker: str, growth_stage1: float = 0.08):
     headers = [f"g={g:.1f}%" for g in sens["growth_axis"]]
     sens_rows = [[f"WACC={sens['wacc_axis'][i]:.2f}%"] + [f"${val:,.2f}" if val > 0 else "N/A" for val in sens["matrix"][i]] for i in range(len(sens["wacc_axis"]))]
     print(tabulate(sens_rows, headers=["WACC \\ g"] + headers, tablefmt="simple"))
+
+    # Auto-generate and save Linked Excel Financial Model
+    reports_dir = Path(__file__).resolve().parent.parent / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    excel_path = reports_dir / f"{ticker}_Valuation_Model.xlsx"
+    
+    exporter = ExcelModelExporter()
+    wb_bytes = exporter.generate_valuation_workbook(
+        ticker=ticker,
+        company_name=sec_data["entity_name"],
+        current_price=market_price,
+        shares_outstanding=shares,
+        beta=beta,
+        risk_free_rate=rf,
+        wacc=wacc,
+        cost_of_equity=wacc_res["cost_of_equity"],
+        growth_stage1=growth_stage1,
+        latest_stmt=latest_stmt,
+        historical_stmts=sec_data["statements"],
+        ratios=ratios,
+        forensic={"f_score": f_score_res["piotroski_f_score"], "m_score": m_score_res["beneish_m_score"], "sloan_accruals": sloan_res["sloan_accrual_ratio"]}
+    )
+    with open(excel_path, "wb") as f:
+        f.write(wb_bytes.read())
+    print(f"\n📊 Linked 3-Statement & DCF Excel Model exported to: {excel_path.relative_to(Path(__file__).resolve().parent.parent)}")
     print("=" * 85)
     return dcf_value
 

@@ -15,6 +15,7 @@ from cfa_quant.stochastic_sim import MertonJumpDiffusion, MJDParameters
 from cfa_quant.options_engine import OptionsAnalyticsEngine
 from cfa_quant.charting import FinancialChartEngine
 from cfa_quant.volatility_surface import VolatilitySurfaceEngine
+from cfa_quant.excel_exporter import ExcelModelExporter
 from cfa_quant.ips_generator import IpsGeneratorEngine, ClientProfile
 from cfa_quant.tax_legal_engine import TaxLegalOptimizationEngine, AccountBalances
 from pipeline.sec_edgar_client import SecEdgarClient
@@ -105,6 +106,9 @@ if has_data:
     m_score = forensic.compute_beneish_m_score(latest_stmt, prior_stmt)
     sloan = forensic.compute_sloan_accruals(latest_stmt)
     
+    bench_engine = IndustryBenchmarkEngine()
+    ratios = bench_engine.compute_cfa_ratios(latest_stmt)
+    
     # ------------------ TAB 1: VALUATION & SML ------------------
     with tab1:
         st.header(f"🏛️ Institutional Valuation Memo: {ticker} ({sec_data['entity_name']})")
@@ -114,6 +118,30 @@ if has_data:
         col2.metric("3-Stage DCF Value", f"${dcf_res['intrinsic_value_per_share']:,.2f}", delta=f"{((dcf_res['intrinsic_value_per_share'] - mkt_data['current_price'])/dcf_res['intrinsic_value_per_share'])*100:+.1f}% MoS")
         col3.metric("Residual Income Value", f"${ri_res['intrinsic_value_per_share']:,.2f}")
         col4.metric("Dynamic WACC", f"{wacc_res['wacc']*100:.2f}%")
+        
+        # 1-Click Excel Exporter Download Button
+        exporter = ExcelModelExporter()
+        wb_bytes = exporter.generate_valuation_workbook(
+            ticker=ticker,
+            company_name=sec_data["entity_name"],
+            current_price=mkt_data["current_price"],
+            shares_outstanding=shares,
+            beta=mkt_data["beta"],
+            risk_free_rate=rf,
+            wacc=wacc_res["wacc"],
+            cost_of_equity=wacc_res["cost_of_equity"],
+            growth_stage1=growth_stage1,
+            latest_stmt=latest_stmt,
+            historical_stmts=sec_data["statements"],
+            ratios=ratios,
+            forensic={"f_score": f_score["piotroski_f_score"], "m_score": m_score["beneish_m_score"], "sloan_accruals": sloan["sloan_accrual_ratio"]}
+        )
+        st.download_button(
+            label=f"📥 Download Linked 3-Statement & DCF Model ({ticker}.xlsx)",
+            data=wb_bytes,
+            file_name=f"{ticker}_Valuation_Model.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
         
         st.markdown("---")
         c1, c2 = st.columns([1, 1])
@@ -166,18 +194,15 @@ if has_data:
         mesh = vol_eng.build_surface_mesh(df_contracts)
         v_metrics = vol_eng.extract_surface_metrics(ticker, df_contracts, mesh)
         
-        # Metric Cards
         vm1, vm2, vm3, vm4 = st.columns(4)
         vm1.metric("ATM IV (30-Day)", f"{v_metrics.atm_iv_30d:.1f}%")
         vm2.metric("ATM IV (180-Day)", f"{v_metrics.atm_iv_180d:.1f}%", v_metrics.term_structure_slope)
         vm3.metric("25-Delta Risk Reversal", f"{v_metrics.skew_25d_risk_reversal_30d:+.2f}%", "Put Skew (Crash Premium)" if v_metrics.skew_25d_risk_reversal_30d > 0 else "Call Skew")
         vm4.metric("25-Delta Butterfly", f"{v_metrics.butterfly_25d_kurtosis_30d:+.2f}%", "Fat Tails / Kurtosis")
         
-        # 3D Interactive Surface
         fig_3d = vol_eng.render_3d_surface_figure(mesh, ticker, v_metrics.spot_price)
         st.plotly_chart(fig_3d, use_container_width=True)
         
-        # 2D Cross-Sections
         fig_2d = vol_eng.render_2d_skew_and_term_structure(mesh, ticker)
         st.plotly_chart(fig_2d, use_container_width=True)
 
@@ -209,9 +234,6 @@ if has_data:
     # ------------------ TAB 5: PEER COMPS & DUPONT 5-WAY ------------------
     with tab5:
         st.header("👥 Competitor Benchmarking & DuPont 5-Way Analysis")
-        bench_engine = IndustryBenchmarkEngine()
-        ratios = bench_engine.compute_cfa_ratios(latest_stmt)
-        
         c1, c2 = st.columns([1, 1])
         with c1:
             st.subheader("🔬 DuPont 5-Way ROE Decomposition")
