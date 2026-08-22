@@ -62,11 +62,13 @@ from cfa_quant.wealth_advisory import (
     AccountBalances
 )
 
-# 5. Data, Security Master, Custodian Gateway & Transaction Warehouse
+# 5. Data, Security Master, Custodian Gateway, News Wire & Transaction Warehouse
 from cfa_quant.data import (
     SecurityMaster,
     TransactionLedger,
     CustodianIngestionGateway,
+    NewsWireEngine,
+    NewsWebSocketServer,
     TaxLot,
     RealizedGainRecord,
     DatabaseAdapter,
@@ -139,6 +141,8 @@ __all__ = [
     "SecurityMaster",
     "TransactionLedger",
     "CustodianIngestionGateway",
+    "NewsWireEngine",
+    "NewsWebSocketServer",
     "TaxLot",
     "RealizedGainRecord",
     "DatabaseAdapter",
