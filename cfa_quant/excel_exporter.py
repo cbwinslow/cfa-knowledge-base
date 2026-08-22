@@ -14,6 +14,7 @@ from typing import Dict, Any, Optional
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
+from openpyxl.chart import BarChart, Reference, Series
 
 class ExcelModelExporter:
     def __init__(self):
@@ -423,6 +424,23 @@ class ExcelModelExporter:
         for c in ["A", "B", "C", "D", "E", "F"]:
             ws_bl.column_dimensions[c].width = 26
 
+        # Embed Native Excel Chart for Black-Litterman Allocation
+        chart_bl = BarChart()
+        chart_bl.type = "col"
+        chart_bl.style = 10
+        chart_bl.title = "Benchmark vs. Optimal Black-Litterman Allocation"
+        chart_bl.y_axis.title = "Allocation Weight"
+        chart_bl.x_axis.title = "Asset Class"
+        data_ref = Reference(ws_bl, min_col=2, min_row=3, max_col=2, max_row=7)
+        data_ref_opt = Reference(ws_bl, min_col=5, min_row=3, max_col=5, max_row=7)
+        chart_bl.add_data(data_ref, titles_from_data=True)
+        chart_bl.add_data(data_ref_opt, titles_from_data=True)
+        cats_ref = Reference(ws_bl, min_col=1, min_row=4, max_row=7)
+        chart_bl.set_categories(cats_ref)
+        chart_bl.height = 12
+        chart_bl.width = 18
+        ws_bl.add_chart(chart_bl, "H3")
+
         # Tab 3: Rebalancing Trade Blotter
         ws_reb = wb.create_sheet(title="Rebalancing Blotter")
         ws_reb["A1"] = "TAX-AWARE REBALANCING BLOTTER & FIX 4.2 EXECUTION ORDERS"
@@ -495,6 +513,21 @@ class ExcelModelExporter:
             
         for c in ["A", "B", "C", "D", "E", "F", "G"]:
             ws_gips.column_dimensions[c].width = 24
+
+        # Embed Native Excel Chart for GIPS Composite Performance
+        chart_gips = BarChart()
+        chart_gips.type = "col"
+        chart_gips.style = 11
+        chart_gips.title = "GIPS Composite Annual Performance vs. Benchmark"
+        chart_gips.y_axis.title = "Annual Return"
+        chart_gips.x_axis.title = "Calendar Year"
+        data_gips = Reference(ws_gips, min_col=2, min_row=3, max_col=4, max_row=7)
+        chart_gips.add_data(data_gips, titles_from_data=True)
+        cats_gips = Reference(ws_gips, min_col=1, min_row=4, max_row=7)
+        chart_gips.set_categories(cats_gips)
+        chart_gips.height = 12
+        chart_gips.width = 18
+        ws_gips.add_chart(chart_gips, "I3")
 
         stream = io.BytesIO()
         wb.save(stream)

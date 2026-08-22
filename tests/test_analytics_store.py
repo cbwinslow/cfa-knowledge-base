@@ -75,3 +75,25 @@ def test_master_institutional_excel_workbook_generation():
     assert "Rebalancing Blotter" in sheet_names
     assert "GIPS Composite Presentation" in sheet_names
 
+def test_analytics_store_json_export_and_import(tmp_path):
+    db1 = tmp_path / "source.duckdb"
+    store1 = AnalyticsStore(db_path=db1)
+    
+    store1.record_calculation("VALUATION", "AAPL", "Apple DCF", "Fair Value", 260.0, {"dcf": 260.0}, {"raw": True})
+    store1.record_calculation("REBALANCING", "AAPL", "Apple Rebal", "Turnover", 50000.0, {"orders": 2}, {"raw": True})
+    
+    json_export_path = tmp_path / "analytics_export.json"
+    exported_count = store1.export_to_json_file(json_export_path)
+    assert exported_count == 2
+    assert json_export_path.exists()
+    
+    # Import into fresh database
+    db2 = tmp_path / "target.duckdb"
+    store2 = AnalyticsStore(db_path=db2)
+    imported_count = store2.import_from_json_file(json_export_path)
+    assert imported_count == 2
+    
+    rec = store2.get_latest_calculation("VALUATION", "AAPL")
+    assert rec is not None
+    assert rec["primary_metric_value"] == 260.0
+

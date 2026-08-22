@@ -158,6 +158,70 @@ class AnalyticsStore:
                 for r in rows
             ]
 
+    # ==================== JSON PORTABILITY EXPORT & IMPORT ====================
+    def export_to_json_file(self, target_json_path: Path) -> int:
+        """
+        Exports all calculation records from DuckDB to a universal portable JSON file.
+        """
+        target_path = Path(target_json_path)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        with self._get_connection(read_only=True) as conn:
+            rows = conn.execute("""
+                SELECT calc_id, calc_type, entity_ticker, summary_title,
+                       primary_metric_label, primary_metric_value, computed_at,
+                       structured_metrics_json, raw_payload_json
+                FROM calculation_records
+                ORDER BY computed_at ASC;
+            """).fetchall()
+            
+            records = [
+                {
+                    "calc_id": r[0],
+                    "calc_type": r[1],
+                    "entity_ticker": r[2],
+                    "summary_title": r[3],
+                    "primary_metric_label": r[4],
+                    "primary_metric_value": r[5],
+                    "computed_at": str(r[6]),
+                    "metrics": safe_json_loads(r[7]),
+                    "raw_payload": safe_json_loads(r[8])
+                }
+                for r in rows
+            ]
+            
+        with open(target_path, "w", encoding="utf-8") as f:
+            json.dump(records, f, indent=2)
+            
+        return len(records)
+
+    def import_from_json_file(self, source_json_path: Path) -> int:
+        """
+        Imports calculation records from a portable JSON file into DuckDB with idempotency.
+        """
+        source_path = Path(source_json_path)
+        if not source_path.exists():
+            return 0
+            
+        with open(source_path, "r", encoding="utf-8") as f:
+            records = json.load(f)
+            
+        imported_count = 0
+        for rec in records:
+            self.record_calculation(
+                calc_type=rec["calc_type"],
+                entity_ticker=rec["entity_ticker"],
+                summary_title=rec.get("summary_title", ""),
+                primary_metric_label=rec.get("primary_metric_label", "Score"),
+                primary_metric_value=float(rec.get("primary_metric_value", 0.0)),
+                structured_metrics=rec.get("metrics", {}),
+                raw_result_payload=rec.get("raw_payload", {}),
+                calc_id=rec["calc_id"]
+            )
+            imported_count += 1
+            
+        return imported_count
+
 if __name__ == "__main__":
     hub = AnalyticsStore()
     
@@ -173,3 +237,4 @@ if __name__ == "__main__":
     print(f"✓ Stored Calculation Record: {cid}")
     latest = hub.get_latest_calculation("VALUATION", "MSFT")
     print(f"✓ Retrieved Latest: {latest['summary_title']} ➔ {latest['primary_metric_label']}: ${latest['primary_metric_value']}")
+
