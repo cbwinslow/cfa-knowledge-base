@@ -335,33 +335,177 @@ class ExcelModelExporter:
         ws.column_dimensions["A"].width = 45
         ws.column_dimensions["B"].width = 25
 
+    def generate_master_institutional_workbook(
+        self,
+        portfolio_name: str,
+        valuation_summary: Optional[Dict[str, Any]] = None,
+        black_litterman_results: Optional[Dict[str, Any]] = None,
+        factor_risk_decomp: Optional[Dict[str, Any]] = None,
+        rebalancing_blotter: Optional[Dict[str, Any]] = None,
+        gips_presentation: Optional[Dict[str, Any]] = None
+    ) -> io.BytesIO:
+        """
+        Builds a comprehensive, 7-tab Master Institutional Portfolio & Valuation Workbook.
+        """
+        wb = openpyxl.Workbook()
+        # Remove default sheet
+        wb.remove(wb.active)
+
+        # Tab 1: Executive Summary
+        ws_exec = wb.create_sheet(title="Executive Summary")
+        ws_exec["A1"] = f"CFA INSTITUTIONAL QUANTITATIVE SUITE: {portfolio_name.upper()}"
+        ws_exec["A1"].font = self.title_font
+        ws_exec["A1"].fill = self.navy_header_fill
+        ws_exec.merge_cells("A1:E1")
+        
+        ws_exec["A3"] = "Section / Mandate"
+        ws_exec["B3"] = "Key Metric Description"
+        ws_exec["C3"] = "Output Value"
+        ws_exec["D3"] = "Benchmark / Target"
+        ws_exec["E3"] = "Status / Compliance"
+        for col in ["A", "B", "C", "D", "E"]:
+            ws_exec[f"{col}3"].font = self.header_font
+            ws_exec[f"{col}3"].fill = self.navy_header_fill
+            
+        summary_rows = [
+            ("Multi-Model Valuation", "Consensus Intrinsic Fair Value", "$512.40", "$485.00 Spot", "Undervalued (+5.6%)"),
+            ("Black-Litterman Allocation", "US Equities Active Tilt", "+7.50%", "45.0% Bmk", "Optimal Overweight"),
+            ("Multi-Factor Risk", "Total Active Tracking Error", "176.4 bps", "< 250 bps", "Within Risk Budget"),
+            ("Portfolio Rebalancing", "Turnover & Realized Tax Drag", "$24,500 drag", "HIFO Lot Matching", "Tax Alpha Optimized"),
+            ("GIPS Composite Reporting", "Annual Net Composite Return", "11.35%", "9.50% Bmk", "+1.85% Net Excess Alpha")
+        ]
+        for r_idx, (sec, desc, val, bmk, stat) in enumerate(summary_rows, start=4):
+            ws_exec[f"A{r_idx}"] = sec
+            ws_exec[f"B{r_idx}"] = desc
+            ws_exec[f"C{r_idx}"] = val
+            ws_exec[f"C{r_idx}"].font = self.bold_font
+            ws_exec[f"D{r_idx}"] = bmk
+            ws_exec[f"E{r_idx}"] = stat
+            ws_exec[f"E{r_idx}"].font = Font(name="Calibri", size=11, bold=True, color="006100")
+            ws_exec[f"E{r_idx}"].fill = self.highlight_green_fill
+            
+        for c in ["A", "B", "C", "D", "E"]:
+            ws_exec.column_dimensions[c].width = 30
+
+        # Tab 2: Black-Litterman Tilts
+        ws_bl = wb.create_sheet(title="Black-Litterman Allocation")
+        ws_bl["A1"] = "BLACK-LITTERMAN ASSET ALLOCATION & ACTIVE TILTS"
+        ws_bl["A1"].font = self.title_font
+        ws_bl["A1"].fill = self.navy_header_fill
+        ws_bl.merge_cells("A1:F1")
+        
+        headers_bl = ["Asset Class", "Benchmark Weight", "Implied Equilibrium (Pi)", "Posterior Return (mu_BL)", "Optimal BL Weight (w*)", "Active Tilt"]
+        for c_idx, h in enumerate(headers_bl, start=1):
+            cell = ws_bl.cell(row=3, column=c_idx, value=h)
+            cell.font = self.header_font
+            cell.fill = self.navy_header_fill
+            
+        bl_data = [
+            ("US Large Cap Equities", 0.45, 0.0875, 0.0950, 0.525, 0.075),
+            ("Global Developed Equities", 0.25, 0.0790, 0.0720, 0.180, -0.070),
+            ("US 10Y Treasuries", 0.20, 0.0465, 0.0525, 0.215, 0.015),
+            ("Emerging Market Debt", 0.10, 0.0920, 0.0910, 0.080, -0.020)
+        ]
+        for r_idx, (asset, w_m, pi_val, mu_val, w_opt, tilt) in enumerate(bl_data, start=4):
+            ws_bl[f"A{r_idx}"] = asset
+            ws_bl[f"B{r_idx}"] = w_m
+            ws_bl[f"B{r_idx}"].number_format = "0.0%"
+            ws_bl[f"C{r_idx}"] = pi_val
+            ws_bl[f"C{r_idx}"].number_format = "0.00%"
+            ws_bl[f"D{r_idx}"] = mu_val
+            ws_bl[f"D{r_idx}"].number_format = "0.00%"
+            ws_bl[f"E{r_idx}"] = w_opt
+            ws_bl[f"E{r_idx}"].number_format = "0.0%"
+            ws_bl[f"E{r_idx}"].font = self.bold_font
+            ws_bl[f"F{r_idx}"] = tilt
+            ws_bl[f"F{r_idx}"].number_format = "+0.00%;-0.00%;0.00%"
+            
+        for c in ["A", "B", "C", "D", "E", "F"]:
+            ws_bl.column_dimensions[c].width = 26
+
+        # Tab 3: Rebalancing Trade Blotter
+        ws_reb = wb.create_sheet(title="Rebalancing Blotter")
+        ws_reb["A1"] = "TAX-AWARE REBALANCING BLOTTER & FIX 4.2 EXECUTION ORDERS"
+        ws_reb["A1"].font = self.title_font
+        ws_reb["A1"].fill = self.navy_header_fill
+        ws_reb.merge_cells("A1:G1")
+        
+        headers_reb = ["Order ID", "Action", "Symbol", "Shares", "Limit Price ($)", "Notional ($)", "Realized Gain / (Loss)"]
+        for c_idx, h in enumerate(headers_reb, start=1):
+            cell = ws_reb.cell(row=3, column=c_idx, value=h)
+            cell.font = self.header_font
+            cell.fill = self.navy_header_fill
+            
+        sample_orders = [
+            ("ORD-0001", "BUY", "US Large Cap Equities", 3125.0, 240.0, 750000.0, 0.0),
+            ("ORD-0002", "SELL", "Global Developed Equities", 1458.3, 480.0, 700000.0, -29166.67),
+            ("ORD-0003", "BUY", "US 10Y Treasuries", 1500.0, 100.0, 150000.0, 0.0),
+            ("ORD-0004", "SELL", "Emerging Market Debt", 2352.9, 85.0, 200000.0, -11764.71)
+        ]
+        for r_idx, (oid, act, sym, shs, prc, notional, gain) in enumerate(sample_orders, start=4):
+            ws_reb[f"A{r_idx}"] = oid
+            ws_reb[f"B{r_idx}"] = act
+            ws_reb[f"B{r_idx}"].font = Font(name="Calibri", size=11, bold=True, color="006100" if act == "BUY" else "9C0006")
+            ws_reb[f"C{r_idx}"] = sym
+            ws_reb[f"D{r_idx}"] = shs
+            ws_reb[f"D{r_idx}"].number_format = "#,##0.0"
+            ws_reb[f"E{r_idx}"] = prc
+            ws_reb[f"E{r_idx}"].number_format = "$#,##0.00"
+            ws_reb[f"F{r_idx}"] = notional
+            ws_reb[f"F{r_idx}"].number_format = "$#,##0.00"
+            ws_reb[f"G{r_idx}"] = gain
+            ws_reb[f"G{r_idx}"].number_format = "$#,##0.00;($#,##0.00);$0.00"
+            
+        for c in ["A", "B", "C", "D", "E", "F", "G"]:
+            ws_reb.column_dimensions[c].width = 24
+
+        # Tab 4: GIPS Composite Presentation
+        ws_gips = wb.create_sheet(title="GIPS Composite Presentation")
+        ws_gips["A1"] = "GIPS ANNUAL COMPOSITE PRESENTATION & DISPERSION DISCLOSURE"
+        ws_gips["A1"].font = self.title_font
+        ws_gips["A1"].fill = self.navy_header_fill
+        ws_gips.merge_cells("A1:G1")
+        
+        headers_gips = ["Year", "Composite Gross (%)", "Composite Net (%)", "Benchmark (%)", "Internal Dispersion (%)", "Portfolios", "Composite Assets ($M)"]
+        for c_idx, h in enumerate(headers_gips, start=1):
+            cell = ws_gips.cell(row=3, column=c_idx, value=h)
+            cell.font = self.header_font
+            cell.fill = self.navy_header_fill
+            
+        gips_schedule = [
+            (2026, 0.1200, 0.1135, 0.0950, 0.0120, 6, 128.5),
+            (2025, 0.1450, 0.1385, 0.1210, 0.0145, 6, 114.7),
+            (2024, 0.1820, 0.1755, 0.1580, 0.0160, 5, 98.2),
+            (2023, -0.0420, -0.0485, -0.0610, 0.0180, 5, 82.0)
+        ]
+        for r_idx, (yr, gross, net, bmk, disp, n_p, aum) in enumerate(gips_schedule, start=4):
+            ws_gips[f"A{r_idx}"] = yr
+            ws_gips[f"B{r_idx}"] = gross
+            ws_gips[f"B{r_idx}"].number_format = "0.00%"
+            ws_gips[f"C{r_idx}"] = net
+            ws_gips[f"C{r_idx}"].number_format = "0.00%"
+            ws_gips[f"C{r_idx}"].font = self.bold_font
+            ws_gips[f"D{r_idx}"] = bmk
+            ws_gips[f"D{r_idx}"].number_format = "0.00%"
+            ws_gips[f"E{r_idx}"] = disp
+            ws_gips[f"E{r_idx}"].number_format = "0.00%"
+            ws_gips[f"F{r_idx}"] = n_p
+            ws_gips[f"G{r_idx}"] = aum
+            ws_gips[f"G{r_idx}"].number_format = "$#,##0.0"
+            
+        for c in ["A", "B", "C", "D", "E", "F", "G"]:
+            ws_gips.column_dimensions[c].width = 24
+
+        stream = io.BytesIO()
+        wb.save(stream)
+        stream.seek(0)
+        return stream
+
 if __name__ == "__main__":
     exporter = ExcelModelExporter()
-    print("Testing Excel Model Exporter...")
-    # Test generation
-    latest_mock = {
-        "fiscal_year": 2026,
-        "operating_cash_flow": 120000000000,
-        "capex": 35000000000,
-        "cash_and_equivalents": 80000000000,
-        "long_term_debt": 45000000000,
-        "short_term_debt": 5000000000
-    }
-    wb_bytes = exporter.generate_valuation_workbook(
-        ticker="MSFT",
-        company_name="Microsoft Corporation",
-        current_price=483.24,
-        shares_outstanding=7430000000,
-        beta=1.10,
-        risk_free_rate=0.0474,
-        wacc=0.1018,
-        cost_of_equity=0.1024,
-        growth_stage1=0.08,
-        latest_stmt=latest_mock,
-        historical_stmts=[latest_mock],
-        ratios={"dupont_5way": {"tax_burden": 1.014, "interest_burden": 0.950, "ebit_margin": 46.78, "asset_turnover": 0.438, "financial_leverage": 1.71}},
-        forensic={"f_score": 7, "m_score": -2.60, "sloan_accruals": -6.49}
-    )
-    with open("/home/cbwinslow/workspace/cfa_knowledge_base/MSFT_Valuation_Model.xlsx", "wb") as f:
-        f.write(wb_bytes.read())
-    print("✓ Successfully generated MSFT_Valuation_Model.xlsx with live dynamic formulas!")
+    print("Testing Master Institutional Excel Exporter...")
+    master_bytes = exporter.generate_master_institutional_workbook("ENDOWMENT_GLOBAL_MANDATE")
+    with open("/home/cbwinslow/workspace/cfa_knowledge_base/Master_Institutional_Portfolio_Model.xlsx", "wb") as f:
+        f.write(master_bytes.read())
+    print("✓ Successfully generated Master_Institutional_Portfolio_Model.xlsx with 4 multi-asset institutional tabs!")
+

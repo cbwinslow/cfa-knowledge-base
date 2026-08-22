@@ -24,6 +24,7 @@ from cfa_quant.hopper import CentralDataHopper
 from pipeline.macro_engine import MacroEngine
 from pipeline.sec_edgar_client import SecEdgarClient
 from pipeline.market_data import MarketDataClient
+from cfa_quant.data.analytics_store import AnalyticsStore
 from cfa_quant.duckdb_macro_store import DuckDbMacroStore
 
 __all__ = [
@@ -32,6 +33,7 @@ __all__ = [
     "CustodianIngestionGateway",
     "NewsWireEngine",
     "NewsWebSocketServer",
+    "AnalyticsStore",
     "TaxLot",
     "RealizedGainRecord",
     "DatabaseAdapter",
