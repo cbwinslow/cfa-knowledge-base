@@ -48,6 +48,18 @@ FREE_NEWS_WIRES = {
     "SEEKING_ALPHA_MARKETS": "https://seekingalpha.com/market_currents.xml"
 }
 
+def safe_json_loads(val: Any, default: Any = None) -> Any:
+    if default is None:
+        default = []
+    if isinstance(val, str) and val.strip():
+        try:
+            return json.loads(val)
+        except Exception:
+            return default
+    elif isinstance(val, (list, dict)):
+        return val
+    return default
+
 class NewsWireEngine:
     def __init__(self, db_path: Path = DB_PATH):
         self.db_path = db_path
@@ -59,7 +71,10 @@ class NewsWireEngine:
         try:
             return duckdb.connect(str(self.db_path), read_only=read_only)
         except Exception:
-            return duckdb.connect(":memory:")
+            try:
+                return duckdb.connect(str(self.db_path), read_only=True)
+            except Exception:
+                return duckdb.connect(str(self.db_path))
 
     def _init_duckdb(self):
         conn = self._get_connection()
@@ -305,9 +320,22 @@ class NewsWireEngine:
         conn = self._get_connection()
         
         sql = """
-            SELECT article_id, source_wire, wire_channel, ticker, related_tickers,
-                   headline, author, publisher, domain, subjects, categories, tags,
-                   lead_image_url, media_urls, summary, url, published_at, raw_payload_json, embedding_vector
+            SELECT article_id, source_wire, wire_channel,
+                   COALESCE(ticker, 'MACRO') AS ticker,
+                   COALESCE(related_tickers, '[]') AS related_tickers,
+                   COALESCE(headline, title, 'Financial Breaking News') AS headline,
+                   COALESCE(title, headline, 'Financial Breaking News') AS title,
+                   COALESCE(author, 'Financial Wire Desk') AS author,
+                   COALESCE(publisher, 'Financial Media') AS publisher,
+                   COALESCE(domain, 'financial-wire.com') AS domain,
+                   COALESCE(subjects, '[]') AS subjects,
+                   COALESCE(categories, '[]') AS categories,
+                   COALESCE(tags, '[]') AS tags,
+                   COALESCE(lead_image_url, '') AS lead_image_url,
+                   COALESCE(media_urls, '[]') AS media_urls,
+                   COALESCE(summary, '') AS summary,
+                   COALESCE(url, '') AS url,
+                   published_at, raw_payload_json, embedding_vector
             FROM news_articles
         """
         params = []
@@ -342,23 +370,23 @@ class NewsWireEngine:
 
             results.append({
                 "article_id": row["article_id"],
-                "headline": row["headline"],
-                "title": row["headline"],
-                "author": row["author"] or "Financial Desk",
-                "publisher": row["publisher"] or "Financial Media",
-                "domain": row["domain"],
-                "ticker": row["ticker"],
-                "related_tickers": json.loads(row["related_tickers"]) if row["related_tickers"] else [],
-                "subjects": json.loads(row["subjects"]) if row["subjects"] else [],
-                "categories": json.loads(row["categories"]) if row["categories"] else [],
-                "tags": json.loads(row["tags"]) if row["tags"] else [],
-                "lead_image_url": row["lead_image_url"],
-                "media_urls": json.loads(row["media_urls"]) if row["media_urls"] else [],
-                "summary": row["summary"],
-                "url": row["url"],
-                "published_at": str(row["published_at"]),
+                "headline": str(row.get("headline", "") or row.get("title", "") or ""),
+                "title": str(row.get("headline", "") or row.get("title", "") or ""),
+                "author": str(row.get("author", "") or "Financial Desk"),
+                "publisher": str(row.get("publisher", "") or "Financial Media"),
+                "domain": str(row.get("domain", "") or ""),
+                "ticker": str(row.get("ticker", "") or "MACRO"),
+                "related_tickers": safe_json_loads(row.get("related_tickers")),
+                "subjects": safe_json_loads(row.get("subjects")),
+                "categories": safe_json_loads(row.get("categories")),
+                "tags": safe_json_loads(row.get("tags")),
+                "lead_image_url": str(row.get("lead_image_url", "") or ""),
+                "media_urls": safe_json_loads(row.get("media_urls")),
+                "summary": str(row.get("summary", "") or ""),
+                "url": str(row.get("url", "") or ""),
+                "published_at": str(row.get("published_at", "")),
                 "similarity_score": round(sim_score, 4),
-                "raw_payload": json.loads(row["raw_payload_json"]) if row["raw_payload_json"] else {}
+                "raw_payload": safe_json_loads(row.get("raw_payload_json"), default={})
             })
 
         results = sorted(results, key=lambda x: x["similarity_score"], reverse=True)
