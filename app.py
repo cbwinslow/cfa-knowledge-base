@@ -15,7 +15,7 @@ from cfa_quant import (
     CfaValuationEngine, ForensicAccountingEngine, CapmSmlModel, IndustryBenchmarkEngine, ExcelModelExporter,
     ScenarioLabEngine, MarginalAllocationEngine, PerformanceAttributionEngine, FixedIncomeLdiEngine, VolatilitySurfaceEngine,
     LifeCyclePortfolioEngine, LifeCycleClient, IpsGeneratorEngine, ClientProfile, TaxLegalOptimizationEngine, AccountBalances,
-    SecurityMaster, TransactionLedger, CentralDataHopper, MacroEngine, SecEdgarClient, MarketDataClient,
+    SecurityMaster, TransactionLedger, CustodianIngestionGateway, NewsWireEngine, CentralDataHopper, MacroEngine, SecEdgarClient, MarketDataClient,
     CfaAgentHarness, HybridRagEngine, PortfolioVisualizer, FinancialChartEngine
 )
 from scripts.query_cfa_kb import search_kb
@@ -77,7 +77,7 @@ with st.sidebar:
                 st.code(f"{wf['filename']} ({wf['size_bytes']} B)", language="text")
 
 # ==================== MAIN DASHBOARD TABS ====================
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15 = st.tabs([
     "🏛️ Valuation & SML",
     "📈 Price Action & Zoom",
     "🌐 3D Vol Surface",
@@ -91,7 +91,8 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13
     "📝 IPS & Life-Cycle Glidepath",
     "⚖️ Tax & Legal Wealth Alpha",
     "🌐 Macro & Yield Curve",
-    "📚 CFA Knowledge Base"
+    "📚 CFA Knowledge Base",
+    "📰 Live News Wire & Media"
 ])
 
 # Shared Data Fetching
@@ -671,3 +672,69 @@ with tab8:
                         st.markdown(f"**Excerpt:**\n{r['content']}")
             else:
                 st.info("No matching curriculum items found.")
+
+    # ------------------ TAB 15: LIVE NEWS WIRE & MEDIA TERMINAL ------------------
+    with tab15:
+        st.header("📰 Institutional Real-Time News Wire & Media Terminal")
+        st.caption("Live streaming SEC 8-K filings, Federal Reserve FOMC wires, MarketWatch, CNBC & financial press feeds with automated quality scoring and vector search.")
+        
+        nw_engine = NewsWireEngine()
+        
+        # Top control hopper
+        c_top1, c_top2, c_top3, c_top4 = st.columns([3, 2, 2, 2])
+        search_kw = c_top1.text_input("🔍 Search News & Filings:", value=ticker)
+        min_q = c_top2.slider("Min Quality Score", min_value=0.0, max_value=1.0, value=0.4, step=0.1)
+        wire_filter = c_top3.selectbox("Filter Wire Channel", ["ALL", "EQUITY_WIRE", "FINANCIAL_WIRE", "SEC_8K"])
+        
+        if c_top4.button("📡 Ingest Live Wires"):
+            with st.spinner("Polling live SEC, Fed, and market wire feeds..."):
+                n_t = nw_engine.ingest_ticker_news(ticker, max_articles=5)
+                w_stats = nw_engine.ingest_all_wire_sources(max_articles_per_wire=3)
+                st.success(f"✓ Ingested {n_t} {ticker} articles + {sum(w_stats.values())} macro/SEC wire disclosures!")
+                
+        # Perform query
+        news_items = nw_engine.search_news_wire(search_kw or ticker, ticker=ticker if not search_kw else None, min_quality_score=min_q, top_k=15)
+        
+        if not news_items:
+            st.info(f"No news articles found matching '{search_kw}'. Click '📡 Ingest Live Wires' above to poll breaking feeds.")
+        else:
+            col_list, col_reader = st.columns([4, 6])
+            
+            with col_list:
+                st.subheader(f"⚡ Live Feed ({len(news_items)} items)")
+                article_options = [f"[{i+1}] {item['headline'][:50]}... ({item['source_wire']})" for i, item in enumerate(news_items)]
+                selected_idx = st.radio("Select Article to Read:", range(len(news_items)), format_func=lambda i: f"⭐ {news_items[i]['quality_score']:.1f} | {news_items[i]['headline'][:55]}... ({news_items[i]['published_at'][:10]})")
+                
+            with col_reader:
+                selected_art = news_items[selected_idx]
+                st.subheader(selected_art["headline"])
+                
+                # Metadata Bar
+                mb1, mb2, mb3 = st.columns(3)
+                mb1.metric("Quality Score", f"{selected_art['quality_score'] * 100:.0f}%")
+                sent_val = selected_art['sentiment_score']
+                mb2.metric("Sentiment", f"{sent_val:+.2f}", delta="Bullish" if sent_val > 0.05 else ("Bearish" if sent_val < -0.05 else "Neutral"))
+                mb3.metric("Ticker / Domain", f"{selected_art['ticker']} | {selected_art['domain']}")
+                
+                st.markdown(f"**Byline:** `{selected_art['author']}` | **Published:** `{selected_art['published_at']}` | **Source:** `{selected_art['source_wire']}`")
+                
+                # Tags
+                if selected_art.get("subjects"):
+                    st.markdown("🏷️ **Topic Taxonomy:** " + " ".join([f"`{s}`" for s in selected_art["subjects"][:6]]))
+                if selected_art.get("related_tickers"):
+                    st.markdown("🏢 **Related Entities:** " + " ".join([f"`{t}`" for t in selected_art["related_tickers"][:8]]))
+                
+                st.markdown("---")
+                
+                # Hero Image or Chart if available
+                if selected_art.get("lead_image_url"):
+                    try:
+                        st.image(selected_art["lead_image_url"], caption=f"Visual asset via {selected_art['domain']}", use_container_width=True)
+                    except Exception:
+                        pass
+                
+                st.markdown(f"### Article Summary\n{selected_art['summary']}")
+                
+                if selected_art.get("url"):
+                    st.link_button("🌐 Open Full Source Document / SEC Filing", selected_art["url"])
+

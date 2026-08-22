@@ -1,21 +1,23 @@
-"""
-Comprehensive Bloomberg-Style Financial News Wire, Metadata & Multimedia Engine
-Zero-cost multi-source news wire aggregator with rich metadata extraction, media parsing,
-and 384-dimensional dense vectorization.
+r"""
+Comprehensive Bloomberg-Style Financial News Wire, Metadata, Quality & Multimedia Engine
+Zero-cost multi-source news wire aggregator with automated quality scoring,
+financial sentiment analysis, taxonomy tagging, rich media extraction, and 384-D vectorization.
 
 Features:
 1. Multi-Source Financial News Wires:
    - SEC EDGAR 8-K Breaking Corporate Event Disclosures
    - Federal Reserve FOMC Policy & Rate Press Releases
    - MarketWatch, CNBC, Yahoo Finance, BusinessWire, PR Newswire, Seeking Alpha
-2. High-Density Metadata Extraction:
-   - Author/Writer Byline, Domain, Publisher, Publish/Updated Timestamps
-   - Subjects, Topic Categories, Keyword Tags
-   - Related Tickers (Regex entity extraction)
-3. Media & Chart Extraction:
-   - Lead Hero Image URLs, Embedded Chart/Infographic Links, Image Captions
-4. Permanent Columnar Storage in DuckDB with Schema Migration
-5. Local 384-Dimensional Dense Vector Embeddings (FastEmbed ONNX)
+2. Automated Quality Metric ($Q \in [0.0, 1.0]$):
+   - Content Completeness, Entity Resolution, Source Integrity, Media Richness, Financial Keyword Density
+3. Automated Sentiment Polarity Engine (-1.0 to +1.0):
+   - Financial Lexicon Polarity Classifier
+4. Structured Taxonomy Tagging:
+   - Earnings & Guidance, Macro/FOMC, M&A/Deals, Regulatory/8-K, Fixed Income, Equity Research
+5. Media & Chart Extraction:
+   - Hero Image URLs, Embedded Chart Links, Captions
+6. Permanent Columnar Storage in DuckDB with Schema Migration
+7. Local 384-Dimensional Dense Vector Embeddings (FastEmbed ONNX)
 """
 
 import re
@@ -30,6 +32,7 @@ import requests
 import feedparser
 import duckdb
 import numpy as np
+import pandas as pd
 
 try:
     from fastembed import TextEmbedding
@@ -46,6 +49,25 @@ FREE_NEWS_WIRES = {
     "MARKETWATCH_TOP_STORIES": "https://feeds.content.dowjones.io/public/rss/mw_topstories",
     "CNBC_FINANCIAL_NEWS": "https://search.cnbc.com/rs/search/combinedlist/view.xml?partnerId=wrss01&id=10000664",
     "SEEKING_ALPHA_MARKETS": "https://seekingalpha.com/market_currents.xml"
+}
+
+FINANCIAL_POSITIVE_WORDS = {
+    "surge", "surged", "beat", "beats", "record", "growth", "profit", "profitable", "upgrade", "upgraded",
+    "outperform", "bullish", "rally", "rallies", "expansion", "dividend", "boost", "higher", "rebound", "gain"
+}
+
+FINANCIAL_NEGATIVE_WORDS = {
+    "plunge", "plunged", "miss", "misses", "loss", "losses", "downgrade", "downgraded", "underperform",
+    "bearish", "slump", "decline", "fall", "drop", "investigation", "default", "warning", "lawsuit", "inflation", "risk"
+}
+
+FINANCIAL_TOPIC_KEYWORDS = {
+    "EARNINGS_AND_GUIDANCE": ["earnings", "eps", "revenue", "guidance", "quarterly", "q1", "q2", "q3", "q4", "fiscal", "profit"],
+    "MACRO_AND_CENTRAL_BANK": ["fomc", "federal reserve", "interest rate", "rate cut", "rate hike", "inflation", "cpi", "gdp", "powell", "treasury"],
+    "MERGERS_AND_ACQUISITIONS": ["merger", "acquisition", "acquire", "buyout", "takeover", "deal", "partnership", "divestiture"],
+    "REGULATORY_AND_SEC_8K": ["sec", "8-k", "form 8-k", "filing", "investigation", "regulatory", "doj", "ftc", "antitrust", "compliance"],
+    "FIXED_INCOME_AND_YIELDS": ["bond", "yield", "treasury", "duration", "spread", "coupon", "credit", "municipal", "muni", "sofr"],
+    "EQUITY_RESEARCH_AND_TECH": ["ai", "cloud", "semiconductor", "chip", "target price", "analyst", "shares", "stock", "nasdaq"]
 }
 
 def safe_json_loads(val: Any, default: Any = None) -> Any:
@@ -103,7 +125,8 @@ class NewsWireEngine:
                 ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 raw_payload_json VARCHAR,
                 embedding_vector DOUBLE[],
-                sentiment_score DOUBLE DEFAULT 0.0
+                sentiment_score DOUBLE DEFAULT 0.0,
+                quality_score DOUBLE DEFAULT 1.0
             );
         """)
         
@@ -119,7 +142,8 @@ class NewsWireEngine:
             ("tags", "VARCHAR"),
             ("lead_image_url", "VARCHAR"),
             ("media_urls", "VARCHAR"),
-            ("media_captions", "VARCHAR")
+            ("media_captions", "VARCHAR"),
+            ("quality_score", "DOUBLE DEFAULT 1.0")
         ]
         for col_name, col_type in cols_to_add:
             if col_name not in existing_cols:
@@ -145,34 +169,95 @@ class NewsWireEngine:
         raw = f"{url}_{title}".strip().lower()
         return f"NEWS-{hashlib.sha256(raw.encode('utf-8')).hexdigest()[:16]}"
 
+    # ==================== AUTOMATED QUALITY METRIC & SENTIMENT ====================
+    def compute_quality_score(self, headline: str, summary: str, meta: Dict[str, Any], sentiment: float) -> float:
+        r"""
+        Computes institutional Article Quality Score $Q \in [0.0, 1.0]$:
+        - Content Completeness (0.35 pts): Headline & clean substantive summary (>80 chars)
+        - Financial Entity Resolution (0.25 pts): Primary ticker detected or macro subject identified
+        - Source & Attribution Integrity (0.20 pts): Known domain + author byline present
+        - Multimedia & Chart Richness (0.20 pts): Lead image or embedded charts found
+        """
+        score = 0.0
+        # 1. Completeness
+        if len(headline.strip()) > 10:
+            score += 0.15
+        if len(summary.strip()) > 80:
+            score += 0.20
+        elif len(summary.strip()) > 20:
+            score += 0.10
+
+        # 2. Entity & Financial Subject
+        if meta.get("primary_ticker") and meta["primary_ticker"] != "MACRO":
+            score += 0.15
+        if len(meta.get("subjects", [])) > 0:
+            score += 0.10
+
+        # 3. Source & Attribution
+        if meta.get("domain") and "financial-wire" not in meta["domain"]:
+            score += 0.10
+        if meta.get("author") and "Market Wire Desk" not in meta["author"] and "Financial Desk" not in meta["author"]:
+            score += 0.10
+
+        # 4. Multimedia & Charts
+        if meta.get("lead_image_url"):
+            score += 0.15
+        if len(meta.get("media_urls", [])) > 1:
+            score += 0.05
+
+        return round(min(1.0, max(0.1, score)), 2)
+
+    def compute_sentiment_score(self, text: str) -> float:
+        """
+        Computes financial sentiment polarity score from -1.0 (very bearish) to +1.0 (very bullish).
+        """
+        tokens = re.findall(r'\w+', text.lower())
+        if not tokens:
+            return 0.0
+            
+        pos_count = sum(1 for t in tokens if t in FINANCIAL_POSITIVE_WORDS)
+        neg_count = sum(1 for t in tokens if t in FINANCIAL_NEGATIVE_WORDS)
+        
+        total = pos_count + neg_count
+        if total == 0:
+            return 0.0
+        return round((pos_count - neg_count) / total, 3)
+
+    def extract_taxonomy_tags(self, text: str) -> List[str]:
+        """
+        Classifies article into institutional financial taxonomy topics.
+        """
+        text_lower = text.lower()
+        matched_topics = []
+        for topic, kws in FINANCIAL_TOPIC_KEYWORDS.items():
+            if any(k in text_lower for k in kws):
+                matched_topics.append(topic)
+        return matched_topics or ["GENERAL_MARKETS"]
+
     # ==================== HIGH-DENSITY METADATA & MEDIA EXTRACTOR ====================
     def extract_rich_metadata(self, entry: Dict[str, Any], raw_summary_html: str, link: str, default_ticker: Optional[str] = None) -> Dict[str, Any]:
-        """
-        Extracts author, domain, subjects, categories, related tickers, and media URLs.
-        """
-        # 1. Author / Byline
         author = str(entry.get("author", "") or entry.get("author_detail", {}).get("name", "") or entry.get("dc_creator", "")).strip()
-        
-        # 2. Publisher & Domain
         parsed_url = urlparse(link)
         domain = parsed_url.netloc.replace("www.", "") if parsed_url.netloc else "financial-wire"
         publisher = entry.get("publisher", domain.split(".")[0].title())
 
-        # 3. Subjects & Categories & Tags
         tags_list = []
         if "tags" in entry and isinstance(entry["tags"], list):
             tags_list = [str(t.get("term", "") or t.get("label", "")).strip() for t in entry["tags"] if t]
         elif "category" in entry:
             tags_list = [str(entry["category"]).strip()]
             
-        subjects = list(set([t for t in tags_list if t]))
+        title = str(entry.get("title", ""))
+        full_text = f"{title} {raw_summary_html}"
+        
+        # Taxonomy classification
+        taxonomy_tags = self.extract_taxonomy_tags(full_text)
+        subjects = list(set([t for t in tags_list if t] + taxonomy_tags))
         categories = [domain.split(".")[0].upper()] + ([subjects[0]] if subjects else [])
 
-        # 4. Extract Images & Charts
+        # Media extraction
         media_urls = []
         lead_image = ""
-        
-        # Check media_content or media_thumbnail
         if "media_content" in entry and isinstance(entry["media_content"], list):
             for mc in entry["media_content"]:
                 if "url" in mc:
@@ -186,23 +271,16 @@ class NewsWireEngine:
                 if enc.get("type", "").startswith("image/") and "href" in enc:
                     media_urls.append(enc["href"])
                     
-        # Check for <img> tags in HTML summary
         img_tags = re.findall(r'<img[^>]+src=["\']([^"\']+)["\']', raw_summary_html, re.IGNORECASE)
         media_urls.extend(img_tags)
-        
-        # Deduplicate media URLs
         media_urls = list(dict.fromkeys(media_urls))
         if media_urls:
             lead_image = media_urls[0]
 
-        # 5. Related Tickers Entity Extraction
-        title = str(entry.get("title", ""))
-        clean_text = f"{title} {raw_summary_html}"
-        found_tickers = re.findall(r'\b([A-Z]{2,5})\b', clean_text)
-        # Filter common words
+        # Related tickers extraction
+        found_tickers = re.findall(r'\b([A-Z]{2,5})\b', full_text)
         stopwords = {"THE", "AND", "FOR", "INC", "CORP", "LLC", "USA", "NEW", "TOP", "FED", "ALL", "SEC", "CEO", "CFO", "GDP", "CPI", "YOY", "MOM", "ETF", "USD", "EUR", "GBP"}
         filtered_tickers = [t for t in set(found_tickers) if t not in stopwords and len(t) <= 5]
-        
         primary_ticker = default_ticker or (filtered_tickers[0] if filtered_tickers else "MACRO")
         
         return {
@@ -221,13 +299,11 @@ class NewsWireEngine:
 
     # ==================== WIRE INGESTION PIPELINES ====================
     def ingest_ticker_news(self, ticker: str, max_articles: int = 10) -> int:
-        """Pulls real-time ticker news via Google Financial RSS"""
         encoded_ticker = ticker.strip().upper()
         feed_url = f"https://news.google.com/rss/search?q={encoded_ticker}+stock+when:7d&hl=en-US&gl=US&ceid=US:en"
         return self._ingest_rss_feed(feed_url, source_wire="Google Finance RSS", wire_channel="EQUITY_WIRE", default_ticker=encoded_ticker, max_items=max_articles)
 
     def ingest_all_wire_sources(self, max_articles_per_wire: int = 10) -> Dict[str, int]:
-        """Ingests across all registered institutional financial wires"""
         results = {}
         headers = {"User-Agent": "CfaQuantSuite/2.0 (Institutional Equity Research & Financial Terminal; charterholder@cfa.org)"}
         
@@ -269,22 +345,20 @@ class NewsWireEngine:
             raw_summary = str(entry.get("summary", "") or entry.get("description", ""))
             clean_summary = re.sub(r'<[^>]+>', '', raw_summary).strip()
             
-            # Rich metadata and media extraction
             meta = self.extract_rich_metadata(entry, raw_summary, link, default_ticker)
             art_id = self.compute_article_id(link, title)
             
-            # Publication date
             pub_raw = entry.get("published", entry.get("updated", ""))
             try:
                 pub_dt = pd.to_datetime(pub_raw).strftime("%Y-%m-%d %H:%M:%S")
             except Exception:
                 pub_dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-            # Dense Vector Embedding
             text_to_embed = f"{title}. {clean_summary}"
             embedding = self.generate_embedding(text_to_embed)
+            sentiment = self.compute_sentiment_score(text_to_embed)
+            quality = self.compute_quality_score(title, clean_summary, meta, sentiment)
 
-            # Raw unadulterated payload (Zero Data Loss)
             raw_payload = json.dumps(dict(entry), default=str)
 
             try:
@@ -293,14 +367,14 @@ class NewsWireEngine:
                         article_id, source_wire, wire_channel, ticker, related_tickers,
                         headline, title, author, publisher, domain, subjects, categories, tags,
                         lead_image_url, media_urls, media_captions, summary, full_text, url,
-                        published_at, ingested_at, raw_payload_json, embedding_vector
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?);
+                        published_at, ingested_at, raw_payload_json, embedding_vector, sentiment_score, quality_score
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?);
                 """, [
                     art_id, source_wire, wire_channel, meta["primary_ticker"], json.dumps(meta["related_tickers"]),
                     title, title, meta["author"], meta["publisher"], meta["domain"],
                     json.dumps(meta["subjects"]), json.dumps(meta["categories"]), json.dumps(meta["tags"]),
                     meta["lead_image_url"], json.dumps(meta["media_urls"]), json.dumps(meta["media_captions"]),
-                    clean_summary, clean_summary, link, pub_dt, raw_payload, embedding
+                    clean_summary, clean_summary, link, pub_dt, raw_payload, embedding, sentiment, quality
                 ])
                 ingested_count += 1
             except Exception:
@@ -314,10 +388,11 @@ class NewsWireEngine:
         self,
         query: str,
         ticker: Optional[str] = None,
-        top_k: int = 5
+        min_quality_score: float = 0.0,
+        top_k: int = 10
     ) -> List[Dict[str, Any]]:
         query_vec = self.generate_embedding(query)
-        conn = self._get_connection()
+        conn = self._get_connection(read_only=True)
         
         sql = """
             SELECT article_id, source_wire, wire_channel,
@@ -335,15 +410,18 @@ class NewsWireEngine:
                    COALESCE(media_urls, '[]') AS media_urls,
                    COALESCE(summary, '') AS summary,
                    COALESCE(url, '') AS url,
-                   published_at, raw_payload_json, embedding_vector
+                   published_at, raw_payload_json, embedding_vector,
+                   COALESCE(sentiment_score, 0.0) AS sentiment_score,
+                   COALESCE(quality_score, 1.0) AS quality_score
             FROM news_articles
+            WHERE COALESCE(quality_score, 1.0) >= ?
         """
-        params = []
+        params = [min_quality_score]
         if ticker:
-            sql += " WHERE ticker = ?"
-            params.append(ticker.upper())
+            sql += " AND (ticker = ? OR related_tickers LIKE ?)"
+            params.extend([ticker.upper(), f"%{ticker.upper()}%"])
             
-        sql += " ORDER BY published_at DESC LIMIT 100;"
+        sql += " ORDER BY published_at DESC LIMIT 150;"
         
         df_news = conn.execute(sql, params).df()
         conn.close()
@@ -370,6 +448,8 @@ class NewsWireEngine:
 
             results.append({
                 "article_id": row["article_id"],
+                "source_wire": row["source_wire"],
+                "wire_channel": row["wire_channel"],
                 "headline": str(row.get("headline", "") or row.get("title", "") or ""),
                 "title": str(row.get("headline", "") or row.get("title", "") or ""),
                 "author": str(row.get("author", "") or "Financial Desk"),
@@ -385,30 +465,29 @@ class NewsWireEngine:
                 "summary": str(row.get("summary", "") or ""),
                 "url": str(row.get("url", "") or ""),
                 "published_at": str(row.get("published_at", "")),
+                "sentiment_score": float(row.get("sentiment_score", 0.0)),
+                "quality_score": float(row.get("quality_score", 1.0)),
                 "similarity_score": round(sim_score, 4),
                 "raw_payload": safe_json_loads(row.get("raw_payload_json"), default={})
             })
 
-        results = sorted(results, key=lambda x: x["similarity_score"], reverse=True)
+        results = sorted(results, key=lambda x: (x["similarity_score"] * 0.7 + x["quality_score"] * 0.3), reverse=True)
         return results[:top_k]
 
 if __name__ == "__main__":
     nw = NewsWireEngine()
     print("=" * 85)
-    print("🏛️ CFA HIGH-DENSITY FINANCIAL NEWS WIRE, METADATA & MULTIMEDIA ENGINE")
+    print("🏛️ CFA QUALITY-SCORED FINANCIAL NEWS WIRE & MEDIA ENGINE")
     print("=" * 85)
     
-    # 1. Ingest across all wires
     ingest_stats = nw.ingest_all_wire_sources(max_articles_per_wire=3)
     print(f"✓ Ingested News Wire Stats: {ingest_stats}")
     
-    # 2. Search and inspect rich metadata & media
-    articles = nw.search_news_wire("earnings revenue and market growth", top_k=3)
+    articles = nw.search_news_wire("earnings growth and monetary policy", top_k=3)
     for idx, a in enumerate(articles, 1):
         print(f"\n[{idx}] 📰 {a['headline']}")
-        print(f"    • Author/Byline: {a['author']} | Domain: {a['domain']} | Published: {a['published_at']}")
-        print(f"    • Ticker: {a['ticker']} | Related Tickers: {a['related_tickers']}")
-        print(f"    • Subjects & Topics: {a['subjects']} | Categories: {a['categories']}")
-        print(f"    • Lead Image URL: {a['lead_image_url'] or 'None'} | Chart Links: {len(a['media_urls'])}")
-        print(f"    • URL: {a['url']}")
+        print(f"    • Quality Score: {a['quality_score']:.2f}/1.0 | Sentiment: {a['sentiment_score']:+.2f}")
+        print(f"    • Author: {a['author']} | Domain: {a['domain']} | Published: {a['published_at']}")
+        print(f"    • Ticker: {a['ticker']} | Topics: {a['subjects']}")
+        print(f"    • Lead Image: {a['lead_image_url'] or 'None'}")
     print("=" * 85)
