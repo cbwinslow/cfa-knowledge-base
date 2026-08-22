@@ -17,12 +17,13 @@ def test_news_wire_vector_ingestion_and_search(tmp_path):
     conn = engine._get_connection()
     conn.execute("""
         INSERT INTO news_articles (
-            article_id, source_wire, wire_channel, ticker, title, summary, url, published_at, raw_payload_json
+            article_id, source_wire, wire_channel, ticker, headline, title, summary, url, domain, published_at, raw_payload_json
         ) VALUES (
             'TEST-001', 'SEC_8K_MATERIAL_EVENTS', 'SEC_8K', 'AAPL',
             'Apple Inc. Announces Strategic Autonomous AI Chip Partnership',
+            'Apple Inc. Announces Strategic Autonomous AI Chip Partnership',
             'Material definitive agreement for next-generation silicon architecture.',
-            'https://sec.gov/Archives/edgar/data/320193/test.htm',
+            'https://sec.gov/Archives/edgar/data/320193/test.htm', 'sec.gov',
             CURRENT_TIMESTAMP, '{"raw": true}'
         );
     """)
