@@ -8,12 +8,12 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import plotly.express as px
 
 from cfa_quant.models import OpportunityCostAssessment, ValuationResult
 from cfa_quant.opportunity_cost import OpportunityCostEngine
 from cfa_quant.stochastic_sim import MertonJumpDiffusion, MJDParameters
 from cfa_quant.options_engine import OptionsAnalyticsEngine
+from cfa_quant.charting import FinancialChartEngine
 from pipeline.sec_edgar_client import SecEdgarClient
 from pipeline.market_data import MarketDataClient
 from pipeline.macro_engine import MacroEngine
@@ -30,23 +30,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom Styling
-st.markdown("""
-<style>
-    .metric-card {
-        background-color: #1e222d;
-        border-radius: 8px;
-        padding: 15px;
-        border: 1px solid #2e3548;
-    }
-    .big-stat {
-        font-size: 24px;
-        font-weight: bold;
-        color: #4CAF50;
-    }
-</style>
-""", unsafe_allow_html=True)
-
 st.sidebar.title("📈 CFA Quant Engine")
 st.sidebar.markdown("Institutional Valuation & Capital Allocation Suite")
 ticker = st.sidebar.text_input("Equity Ticker", value="MSFT").upper()
@@ -56,8 +39,9 @@ st.sidebar.markdown("---")
 st.sidebar.caption("Grounded in CFA Level I/II/III Curriculum & Academic Quant Research.")
 
 # ==================== MAIN DASHBOARD TABS ====================
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "🏛️ Valuation & SML",
+    "📈 Price Action & Zoom",
     "🎯 Opportunity Cost & EVA",
     "👥 Peer Comps & DuPont 5-Way",
     "🌐 Macro & Yield Curve",
@@ -158,8 +142,17 @@ if has_data:
             fc2.metric("Beneish M-Score", f"{m_score['beneish_m_score']:.2f}", m_score['manipulation_risk'])
             fc3.metric("Sloan Accruals", f"{sloan['sloan_accrual_ratio']:+.2f}%", sloan['earnings_quality'])
 
-    # ------------------ TAB 2: OPPORTUNITY COST & EVA ------------------
+    # ------------------ TAB 2: PRICE ACTION & RECURSIVE ZOOM ------------------
     with tab2:
+        st.header(f"📈 {ticker} Interactive Candlestick & Volume Surface")
+        st.caption("Click-and-drag across any sub-region on the chart to zoom into that custom timeframe, or use the range buttons / slider below.")
+        
+        chart_eng = FinancialChartEngine()
+        fig_candle = chart_eng.build_candlestick_figure(ticker, period="2y")
+        st.plotly_chart(fig_candle, use_container_width=True)
+
+    # ------------------ TAB 3: OPPORTUNITY COST & EVA ------------------
+    with tab3:
         st.header("🎯 Opportunity Cost & Capital Allocation Assessment")
         opp_eng = OpportunityCostEngine(risk_free_rate=rf, equity_risk_premium=0.050)
         opp_res = opp_eng.evaluate_opportunity_cost(
@@ -183,8 +176,8 @@ if has_data:
         
         st.markdown(f"### 📋 Allocation Verdict\n> **{opp_res.opportunity_cost_verdict}**")
 
-    # ------------------ TAB 3: PEER COMPS & DUPONT 5-WAY ------------------
-    with tab3:
+    # ------------------ TAB 4: PEER COMPS & DUPONT 5-WAY ------------------
+    with tab4:
         st.header("👥 Competitor Benchmarking & DuPont 5-Way Analysis")
         
         bench_engine = IndustryBenchmarkEngine()
@@ -210,8 +203,8 @@ if has_data:
                 df_peers = pd.DataFrame(peer_comp["peer_data"])
                 st.dataframe(df_peers, use_container_width=True)
 
-    # ------------------ TAB 4: MACRO & YIELD CURVE ------------------
-    with tab4:
+    # ------------------ TAB 5: MACRO & YIELD CURVE ------------------
+    with tab5:
         st.header("🌐 Macroeconomic & Yield Curve Regime Studio")
         m_summary = macro_snap["macro_risk_summary"]
         
@@ -231,8 +224,8 @@ if has_data:
         fig_yc.update_layout(title=f"Yield Curve Regime: {macro_snap['yield_curve']['regime']}", xaxis_title="Tenor", yaxis_title="Yield (%)", template="plotly_dark")
         st.plotly_chart(fig_yc, use_container_width=True)
 
-    # ------------------ TAB 5: MARKOV MONTE CARLO SIMULATOR ------------------
-    with tab5:
+    # ------------------ TAB 6: MARKOV MONTE CARLO SIMULATOR ------------------
+    with tab6:
         st.header("🎲 Markov Regime-Switching Monte Carlo 10,000-Path Simulator")
         sim_years = st.slider("Simulation Horizon (Years)", 1, 5, 3)
         
@@ -256,8 +249,8 @@ if has_data:
         fig_mc.update_layout(title=f"Stochastic Price Projections ({ticker})", xaxis_title="Years", yaxis_title="Stock Price ($)", template="plotly_dark")
         st.plotly_chart(fig_mc, use_container_width=True)
 
-# ------------------ TAB 6: CFA KNOWLEDGE BASE ------------------
-with tab6:
+# ------------------ TAB 7: CFA KNOWLEDGE BASE ------------------
+with tab7:
     st.header("📚 CFA Curriculum & Quantitative Research Search")
     query = st.text_input("Query CFA Knowledge Base (Formulas, LOS, Mock Exams, Research):", value="Human Capital Asset Allocation")
     if query:
