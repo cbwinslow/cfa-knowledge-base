@@ -18,13 +18,14 @@ from cfa_quant.volatility_surface import VolatilitySurfaceEngine
 from cfa_quant.excel_exporter import ExcelModelExporter
 from cfa_quant.ips_generator import IpsGeneratorEngine, ClientProfile
 from cfa_quant.tax_legal_engine import TaxLegalOptimizationEngine, AccountBalances
+from cfa_quant.fixed_income_ldi import FixedIncomeLdiEngine, BondAsset, LiabilityObligation
 from pipeline.sec_edgar_client import SecEdgarClient
 from pipeline.market_data import MarketDataClient
 from pipeline.macro_engine import MacroEngine
 from pipeline.industry_benchmarks import IndustryBenchmarkEngine
 from pipeline.capm_sml_model import CapmSmlModel
 from pipeline.cfa_valuation_engine import CfaValuationEngine
-from pipeline.forensic_accounting import ForensicAccountingEngine
+from forensic_accounting import ForensicAccountingEngine
 from scripts.query_cfa_kb import search_kb
 
 st.set_page_config(
@@ -43,10 +44,11 @@ st.sidebar.markdown("---")
 st.sidebar.caption("Grounded in CFA Level I/II/III Curriculum Standards.")
 
 # ==================== MAIN DASHBOARD TABS ====================
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
     "🏛️ Valuation & SML",
     "📈 Price Action & Zoom",
     "🌐 3D Vol Surface",
+    "🛡️ Fixed Income LDI",
     "🎯 Opportunity Cost & EVA",
     "👥 Peer Comps & DuPont 5-Way",
     "📝 IPS Generator (L3)",
@@ -206,8 +208,68 @@ if has_data:
         fig_2d = vol_eng.render_2d_skew_and_term_structure(mesh, ticker)
         st.plotly_chart(fig_2d, use_container_width=True)
 
-    # ------------------ TAB 4: OPPORTUNITY COST & EVA ------------------
-    with tab4:
+# ------------------ TAB 4: FIXED INCOME LDI & IMMUNIZATION ------------------
+with tab4:
+    st.header("🛡️ CFA Level III Fixed Income LDI & Immunization Studio")
+    st.caption("Matches portfolio duration, satisfies convexity constraints, and minimizes M^2 structural dispersion.")
+    
+    ldi_engine = FixedIncomeLdiEngine()
+    
+    c_ldi1, c_ldi2 = st.columns(2)
+    with c_ldi1:
+        st.subheader("🎯 Liability Disbursement Obligation")
+        liab_amount = st.number_input("Liability Cash Flow Amount ($)", min_value=100000.0, value=10000000.0, step=500000.0)
+        liab_years = st.number_input("Liability Due In (Years)", min_value=1.0, value=7.0, step=0.5)
+        discount_y = st.number_input("Discount Rate / YTM (%)", value=4.5, step=0.1) / 100.0
+        
+        target_liab = LiabilityObligation(
+            name="Institutional Pension Liability",
+            due_in_years=liab_years,
+            cash_flow_amount=liab_amount,
+            discount_yield=discount_y
+        )
+        
+    with c_ldi2:
+        st.subheader("📦 Candidate Bond Portfolio Construction (Barbell)")
+        b1_mat = st.slider("Bond 1 Maturity (Short Leg)", 1, 5, 3)
+        b1_coupon = st.number_input("Bond 1 Coupon Rate (%)", value=4.0, step=0.25) / 100.0
+        b1_alloc = st.number_input("Bond 1 Dollar Allocation ($)", value=4200000.0, step=100000.0)
+        
+        b2_mat = st.slider("Bond 2 Maturity (Long Leg)", 8, 20, 12)
+        b2_coupon = st.number_input("Bond 2 Coupon Rate (%)", value=4.8, step=0.25) / 100.0
+        b2_alloc = st.number_input("Bond 2 Dollar Allocation ($)", value=3400000.0, step=100000.0)
+        
+        bond1 = ldi_engine.compute_bond_analytics(coupon_rate=b1_coupon, maturity_years=b1_mat, ytm=discount_y)
+        bond2 = ldi_engine.compute_bond_analytics(coupon_rate=b2_coupon, maturity_years=b2_mat, ytm=discount_y)
+        
+    if st.button("🚀 Evaluate Immunization & Yield Curve Shocks"):
+        port_assets = [(bond1, b1_alloc), (bond2, b2_alloc)]
+        imm_res = ldi_engine.evaluate_liability_immunization(port_assets, target_liab)
+        
+        im1, im2, im3, im4 = st.columns(4)
+        im1.metric("Portfolio PV", f"${imm_res.portfolio_present_value:,.2f}", "Solvent" if imm_res.is_solvency_satisfied else "Deficit")
+        im2.metric("Macaulay Duration", f"{imm_res.portfolio_macaulay_duration:.2f} yrs", f"Liability: {imm_res.liability_macaulay_duration:.2f} yrs")
+        im3.metric("Convexity", f"{imm_res.portfolio_convexity:.1f}", f"Liability: {imm_res.liability_convexity:.1f}")
+        im4.metric("M^2 Dispersion", f"{imm_res.structural_dispersion_m2:.2f}")
+        
+        st.info(f"**Contingent Status:** {imm_res.contingent_immunization_status}")
+        
+        # Yield Curve Shocks Table
+        st.subheader("⚡ Non-Parallel Yield Curve Stress Test")
+        shock_rows = []
+        for s_type in ["Parallel +100bps", "Parallel -100bps", "Steepening", "Flattening", "Positive Butterfly"]:
+            sh_out = ldi_engine.simulate_yield_curve_shifts(port_assets, target_liab, s_type)
+            shock_rows.append({
+                "Scenario": sh_out["scenario"],
+                "Portfolio Value": f"${sh_out['portfolio_value_post_shock']:,.2f}",
+                "Liability Value": f"${sh_out['liability_value_post_shock']:,.2f}",
+                "Surplus / (Deficit)": f"${sh_out['post_shock_surplus']:,.2f}",
+                "Protected": "✓ Protected" if sh_out["immunization_protected"] else "✗ Breach"
+            })
+        st.table(pd.DataFrame(shock_rows))
+
+    # ------------------ TAB 5: OPPORTUNITY COST & EVA ------------------
+    with tab5:
         st.header("🎯 Opportunity Cost & Capital Allocation Assessment")
         opp_eng = OpportunityCostEngine(risk_free_rate=rf, equity_risk_premium=0.050)
         opp_res = opp_eng.evaluate_opportunity_cost(
@@ -231,8 +293,8 @@ if has_data:
         
         st.markdown(f"### 📋 Allocation Verdict\n> **{opp_res.opportunity_cost_verdict}**")
 
-    # ------------------ TAB 5: PEER COMPS & DUPONT 5-WAY ------------------
-    with tab5:
+    # ------------------ TAB 6: PEER COMPS & DUPONT 5-WAY ------------------
+    with tab6:
         st.header("👥 Competitor Benchmarking & DuPont 5-Way Analysis")
         c1, c2 = st.columns([1, 1])
         with c1:
@@ -254,8 +316,8 @@ if has_data:
                 df_peers = pd.DataFrame(peer_comp["peer_data"])
                 st.dataframe(df_peers, use_container_width=True)
 
-# ------------------ TAB 6: IPS GENERATOR (CFA LEVEL III) ------------------
-with tab6:
+# ------------------ TAB 7: IPS GENERATOR (CFA LEVEL III) ------------------
+with tab7:
     st.header("📝 Institutional Investment Policy Statement (IPS) Generator")
     st.caption("Constructs an audit-ready, institutional IPS following CFA Level III Private Wealth standards.")
     
@@ -294,8 +356,8 @@ with tab6:
         st.markdown(ips_doc)
         st.download_button("📥 Download IPS Document (.md)", ips_doc, file_name=f"IPS_{client_name.replace(' ', '_')}.md", mime="text/markdown")
 
-# ------------------ TAB 7: TAX & LEGAL WEALTH ALPHA ------------------
-with tab7:
+# ------------------ TAB 8: TAX & LEGAL WEALTH ALPHA ------------------
+with tab8:
     st.header("⚖️ Tax-Alpha Asset Location & Cross-Border Optimization")
     
     tl_col1, tl_col2 = st.columns(2)
@@ -325,8 +387,8 @@ with tab7:
             st.metric("Annual Tax Savings", f"${arb_res['annual_tax_arbitrage_savings']:,.2f}/yr")
             st.metric("10-Year Compounded Wealth Delta", f"${arb_res['10_year_compounded_savings']:,.2f}")
 
-# ------------------ TAB 8: MACRO & YIELD CURVE ------------------
-with tab8:
+# ------------------ TAB 9: MACRO & YIELD CURVE ------------------
+with tab9:
     st.header("🌐 Macroeconomic & Yield Curve Regime Studio")
     if has_data:
         m_summary = macro_snap["macro_risk_summary"]
@@ -345,8 +407,8 @@ with tab8:
         fig_yc.update_layout(title=f"Yield Curve Regime: {macro_snap['yield_curve']['regime']}", xaxis_title="Tenor", yaxis_title="Yield (%)", template="plotly_dark")
         st.plotly_chart(fig_yc, use_container_width=True)
 
-# ------------------ TAB 9: CFA KNOWLEDGE BASE ------------------
-with tab9:
+# ------------------ TAB 10: CFA KNOWLEDGE BASE ------------------
+with tab10:
     st.header("📚 CFA Curriculum & Quantitative Research Search")
     query = st.text_input("Query CFA Knowledge Base (Formulas, LOS, Mock Exams, Research):", value="Human Capital Asset Allocation")
     if query:
