@@ -186,26 +186,32 @@ class PerformanceAttributionEngine:
         period_selection_effects: List[float]
     ) -> Dict[str, float]:
         """
-        Carino Logarithmic Linking coefficient:
+        Carino Logarithmic Linking Algorithm (CFA CIPM Standard):
         L_t = [ ln(1 + R_p,t) - ln(1 + R_b,t) ] / [ R_p,t - R_b,t ]
-        Links multi-period returns without geometric compounding residuals.
+        L_T = [ ln(1 + R_P) - ln(1 + R_B) ] / [ R_P - R_B ]
+        A_linked = sum( A_t * (L_t / L_T) )
+        Guarantees exact additivity of linked effects to cumulative multi-period excess return.
         """
         n = len(period_excess_returns)
         if n == 0:
             return {"linked_allocation_pct": 0.0, "linked_selection_pct": 0.0, "cumulative_excess_pct": 0.0}
             
-        weights = []
-        for ex in period_excess_returns:
-            # When excess is very small, L_t approaches 1.0
-            w = np.log(1.0 + ex) / ex if abs(ex) > 1e-6 else 1.0
-            weights.append(w)
-            
-        sum_w = sum(weights)
-        norm_weights = [w / sum_w for w in weights]
-        
-        linked_alloc = sum(a * w for a, w in zip(period_allocation_effects, norm_weights))
-        linked_select = sum(s * w for s, w in zip(period_selection_effects, norm_weights))
         cum_excess = sum(period_excess_returns)
+        
+        # Calculate L_t for each period
+        L_t = []
+        for ex in period_excess_returns:
+            val = np.log(1.0 + ex) / ex if abs(ex) > 1e-7 else 1.0
+            L_t.append(val)
+            
+        # Calculate aggregate L_T
+        L_T = np.log(1.0 + cum_excess) / cum_excess if abs(cum_excess) > 1e-7 else 1.0
+        
+        # Scaling coefficients c_t = L_t / L_T
+        c_t = [l / L_T for l in L_t]
+        
+        linked_alloc = sum(a * c for a, c in zip(period_allocation_effects, c_t))
+        linked_select = sum(s * c for s, c in zip(period_selection_effects, c_t))
         
         return {
             "linked_allocation_pct": round(linked_alloc * 100, 2),

@@ -82,10 +82,10 @@ class SecurityMaster:
     def detect_identifier_type(self, raw_id: str) -> str:
         cleaned = raw_id.strip().upper()
         
-        if re.match(r'^[A-Z]{2}[A-Z0-9]{9}[0-9]$', cleaned):
-            return "ISIN"
-        elif re.match(r'^[A-Z0-9]{12}$', cleaned) and (cleaned.startswith("BBG") or cleaned.startswith("NRG")):
+        if re.match(r'^[A-Z0-9]{12}$', cleaned) and (cleaned.startswith("BBG") or cleaned.startswith("NRG")):
             return "FIGI"
+        elif re.match(r'^[A-Z]{2}[A-Z0-9]{9}[0-9]$', cleaned):
+            return "ISIN"
         elif re.match(r'^[A-Z0-9]{9}$', cleaned):
             return "CUSIP"
         elif re.match(r'^[B-DF-HJ-NP-TV-Z0-9]{6}[0-9]$', cleaned) or (len(cleaned) == 7 and cleaned.isalnum()):
