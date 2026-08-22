@@ -20,6 +20,12 @@ from cfa_quant.ips_generator import IpsGeneratorEngine, ClientProfile
 from cfa_quant.lifecycle_portfolio import LifeCyclePortfolioEngine, LifeCycleClient
 from cfa_quant.tax_legal_engine import TaxLegalOptimizationEngine, AccountBalances
 from cfa_quant.fixed_income_ldi import FixedIncomeLdiEngine, BondAsset, LiabilityObligation
+from cfa_quant.hopper import CentralDataHopper
+from cfa_quant.scenario_lab import ScenarioLabEngine
+from cfa_quant.instruments.portfolio import UnifiedPortfolio
+from cfa_quant.instruments.fixed_income import FixedCouponBond, InflationLinkedBond
+from cfa_quant.instruments.equity import PublicEquityStock, RealEstateAsset, PrivateEquityHolding
+
 from pipeline.sec_edgar_client import SecEdgarClient
 from pipeline.market_data import MarketDataClient
 from pipeline.macro_engine import MacroEngine
@@ -45,10 +51,11 @@ st.sidebar.markdown("---")
 st.sidebar.caption("Grounded in CFA Level I/II/III Curriculum Standards.")
 
 # ==================== MAIN DASHBOARD TABS ====================
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs([
     "🏛️ Valuation & SML",
     "📈 Price Action & Zoom",
     "🌐 3D Vol Surface",
+    "🧪 Scenario Lab & Compare",
     "🛡️ Fixed Income LDI",
     "🎯 Opportunity Cost & EVA",
     "👥 Peer Comps & DuPont 5-Way",
@@ -209,8 +216,48 @@ if has_data:
         fig_2d = vol_eng.render_2d_skew_and_term_structure(mesh, ticker)
         st.plotly_chart(fig_2d, use_container_width=True)
 
-# ------------------ TAB 4: FIXED INCOME LDI & IMMUNIZATION ------------------
+# ------------------ TAB 4: SCENARIO LAB & PORTFOLIO COMPARE ------------------
 with tab4:
+    st.header("🧪 CFA Multi-Portfolio Comparison & Macroeconomic Stress Lab")
+    st.caption("Head-to-head comparison of Current vs. Proposed Portfolios and simulation of historical macro shocks.")
+    
+    # Default Benchmark Portfolios
+    port_curr = UnifiedPortfolio("Portfolio A (Current 60/40)")
+    port_curr.add_instrument(PublicEquityStock("US Large Cap Equities", beta=1.0, expected_earnings_growth=0.065, historical_volatility=0.18), 6000000.0)
+    port_curr.add_instrument(FixedCouponBond("Core Aggregate Bonds", coupon_rate=0.035, maturity_years=7.0, yield_to_maturity=0.045), 4000000.0)
+    
+    port_prop = UnifiedPortfolio("Portfolio B (CFA Institutional Endowment)")
+    port_prop.add_instrument(PublicEquityStock("Global Compounders", beta=0.95, expected_earnings_growth=0.08, historical_volatility=0.16), 4000000.0)
+    port_prop.add_instrument(FixedCouponBond("10Y Treasury LDI", coupon_rate=0.045, maturity_years=10.0, yield_to_maturity=0.0469), 2000000.0)
+    port_prop.add_instrument(InflationLinkedBond("10Y TIPS Inflation Hedge", coupon_rate=0.020, maturity_years=10.0, yield_to_maturity=0.021), 1500000.0)
+    port_prop.add_instrument(RealEstateAsset("Commercial Real Estate", net_operating_income=80000.0, cap_rate=0.055), 1500000.0)
+    port_prop.add_instrument(PrivateEquityHolding("Growth Equity LP", target_irr=0.15), 1000000.0)
+    
+    lab_eng = ScenarioLabEngine()
+    comp_report = lab_eng.compare_portfolios(port_curr, port_prop)
+    
+    # Key Summary Cards
+    sc1, sc2, sc3, sc4 = st.columns(4)
+    sc1.metric("Return Delta", f"{comp_report.delta_metrics['expected_return_delta_bps']:+.1f} bps/yr", "Port B vs Port A")
+    sc2.metric("Volatility Delta", f"{comp_report.delta_metrics['volatility_delta_bps']:+.1f} bps", "Lower Risk" if comp_report.delta_metrics['volatility_delta_bps'] < 0 else "Higher Risk")
+    sc3.metric("Sharpe Delta", f"{comp_report.delta_metrics['sharpe_delta']:+.2f}", f"Port B Sharpe: {comp_report.metrics_b['sharpe_ratio']:.2f}")
+    sc4.metric("95% VaR Protection Delta", f"${comp_report.delta_metrics['var_95_delta_usd']:+,.2f}")
+    
+    st.markdown("---")
+    
+    # Visual Comparison Charts
+    fig_bar, fig_radar = lab_eng.render_comparison_visuals(comp_report)
+    vc1, vc2 = st.columns(2)
+    with vc1:
+        st.plotly_chart(fig_bar, use_container_width=True)
+    with vc2:
+        st.plotly_chart(fig_radar, use_container_width=True)
+        
+    st.subheader("⚡ Macroeconomic Stress Test & Crisis Simulation")
+    st.table(comp_report.stress_test_comparison)
+
+# ------------------ TAB 5: FIXED INCOME LDI & IMMUNIZATION ------------------
+with tab5:
     st.header("🛡️ CFA Level III Fixed Income LDI & Immunization Studio")
     st.caption("Matches portfolio duration, satisfies convexity constraints, and minimizes M^2 structural dispersion.")
     
@@ -268,8 +315,8 @@ with tab4:
             })
         st.table(pd.DataFrame(shock_rows))
 
-    # ------------------ TAB 5: OPPORTUNITY COST & EVA ------------------
-    with tab5:
+    # ------------------ TAB 6: OPPORTUNITY COST & EVA ------------------
+    with tab6:
         st.header("🎯 Opportunity Cost & Capital Allocation Assessment")
         opp_eng = OpportunityCostEngine(risk_free_rate=rf, equity_risk_premium=0.050)
         opp_res = opp_eng.evaluate_opportunity_cost(
@@ -293,8 +340,8 @@ with tab4:
         
         st.markdown(f"### 📋 Allocation Verdict\n> **{opp_res.opportunity_cost_verdict}**")
 
-    # ------------------ TAB 6: PEER COMPS & DUPONT 5-WAY ------------------
-    with tab6:
+    # ------------------ TAB 7: PEER COMPS & DUPONT 5-WAY ------------------
+    with tab7:
         st.header("👥 Competitor Benchmarking & DuPont 5-Way Analysis")
         c1, c2 = st.columns([1, 1])
         with c1:
@@ -316,8 +363,8 @@ with tab4:
                 df_peers = pd.DataFrame(peer_comp["peer_data"])
                 st.dataframe(df_peers, use_container_width=True)
 
-# ------------------ TAB 7: IPS & LIFE-CYCLE GLIDEPATH (CFA LEVEL III) ------------------
-with tab7:
+# ------------------ TAB 8: IPS & LIFE-CYCLE GLIDEPATH (CFA LEVEL III) ------------------
+with tab8:
     st.header("📝 Institutional Investment Policy Statement (IPS) & Life-Cycle Glidepath")
     st.caption("Constructs an audit-ready, institutional IPS and dynamic age-based asset allocation glidepath.")
     
@@ -362,11 +409,9 @@ with tab7:
         w3.metric("Total Economic Net Worth", f"${lc_profile.total_economic_net_worth:,.2f}")
         w4.metric("Recommended SAA", f"{lc_profile.recommended_equity_pct:.0f}% Equity / {lc_profile.recommended_fixed_income_pct:.0f}% FI")
         
-        # Interactive Area Chart Glidepath
         fig_glide = lc_engine.render_glidepath_figure(df_glidepath, client_name)
         st.plotly_chart(fig_glide, use_container_width=True)
         
-        # Goals-Based Buckets
         st.subheader("🎯 Goals-Based Wealth Management (GBWM) Decomposition")
         gb = lc_profile.goals_based_buckets
         gb1, gb2, gb3 = st.columns(3)
@@ -393,8 +438,8 @@ with tab7:
         st.markdown(ips_doc)
         st.download_button("📥 Download Full IPS Document (.md)", ips_doc, file_name=f"IPS_{client_name.replace(' ', '_')}.md", mime="text/markdown")
 
-# ------------------ TAB 8: TAX & LEGAL WEALTH ALPHA ------------------
-with tab8:
+# ------------------ TAB 9: TAX & LEGAL WEALTH ALPHA ------------------
+with tab9:
     st.header("⚖️ Tax-Alpha Asset Location & Cross-Border Optimization")
     
     tl_col1, tl_col2 = st.columns(2)
@@ -424,8 +469,8 @@ with tab8:
             st.metric("Annual Tax Savings", f"${arb_res['annual_tax_arbitrage_savings']:,.2f}/yr")
             st.metric("10-Year Compounded Wealth Delta", f"${arb_res['10_year_compounded_savings']:,.2f}")
 
-# ------------------ TAB 9: MACRO & YIELD CURVE ------------------
-with tab9:
+# ------------------ TAB 10: MACRO & YIELD CURVE ------------------
+with tab10:
     st.header("🌐 Macroeconomic & Yield Curve Regime Studio")
     if has_data:
         m_summary = macro_snap["macro_risk_summary"]
@@ -444,8 +489,8 @@ with tab9:
         fig_yc.update_layout(title=f"Yield Curve Regime: {macro_snap['yield_curve']['regime']}", xaxis_title="Tenor", yaxis_title="Yield (%)", template="plotly_dark")
         st.plotly_chart(fig_yc, use_container_width=True)
 
-# ------------------ TAB 10: CFA KNOWLEDGE BASE ------------------
-with tab10:
+# ------------------ TAB 11: CFA KNOWLEDGE BASE ------------------
+with tab11:
     st.header("📚 CFA Curriculum & Quantitative Research Search")
     query = st.text_input("Query CFA Knowledge Base (Formulas, LOS, Mock Exams, Research):", value="Human Capital Asset Allocation")
     if query:

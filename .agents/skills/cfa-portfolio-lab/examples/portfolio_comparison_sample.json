@@ -1,0 +1,23 @@
+{
+  "comparison_mandate": {
+    "client_name": "Marcus & Sophia Vance",
+    "total_capital": 10000000.0,
+    "portfolio_a": {
+      "name": "Current Traditional 60/40 Portfolio",
+      "holdings": [
+        {"name": "US Large Cap Equities", "asset_class": "Global Equities", "dollars": 6000000.0, "beta": 1.0, "expected_return": 0.065, "volatility": 0.18},
+        {"name": "Core Aggregate Bonds", "asset_class": "Fixed Income", "dollars": 4000000.0, "duration": 7.0, "yield_to_maturity": 0.045}
+      ]
+    },
+    "portfolio_b": {
+      "name": "Proposed CFA Institutional Endowment Portfolio",
+      "holdings": [
+        {"name": "Global Compounders", "asset_class": "Global Equities", "dollars": 4000000.0, "beta": 0.95, "expected_return": 0.080, "volatility": 0.16},
+        {"name": "10Y Treasury LDI", "asset_class": "Fixed Income", "dollars": 2000000.0, "duration": 10.0, "yield_to_maturity": 0.0469},
+        {"name": "10Y TIPS Inflation Hedge", "asset_class": "Fixed Income", "dollars": 1500000.0, "duration": 10.0, "yield_to_maturity": 0.021},
+        {"name": "Commercial Real Estate", "asset_class": "Real Estate", "dollars": 1500000.0, "cap_rate": 0.055, "expected_return": 0.085},
+        {"name": "Growth Equity LP", "asset_class": "Private Equity", "dollars": 1000000.0, "target_irr": 0.15}
+      ]
+    }
+  }
+}
