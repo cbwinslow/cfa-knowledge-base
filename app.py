@@ -13,7 +13,7 @@ from cfa_quant import (
     UnifiedPortfolio, FixedCouponBond, InflationLinkedBond, MunicipalBond, MortgageBackedSecurity,
     PublicEquityStock, RealEstateAsset, PrivateEquityHolding,
     CfaValuationEngine, ForensicAccountingEngine, CapmSmlModel, IndustryBenchmarkEngine, ExcelModelExporter,
-    ScenarioLabEngine, MarginalAllocationEngine, PerformanceAttributionEngine, FixedIncomeLdiEngine, VolatilitySurfaceEngine,
+    BlackLittermanEngine, GipsCompositeEngine, ScenarioLabEngine, MarginalAllocationEngine, PerformanceAttributionEngine, FixedIncomeLdiEngine, VolatilitySurfaceEngine,
     LifeCyclePortfolioEngine, LifeCycleClient, IpsGeneratorEngine, ClientProfile, TaxLegalOptimizationEngine, AccountBalances,
     SecurityMaster, TransactionLedger, CustodianIngestionGateway, NewsWireEngine, CentralDataHopper, MacroEngine, SecEdgarClient, MarketDataClient,
     CfaAgentHarness, HybridRagEngine, PortfolioVisualizer, FinancialChartEngine
@@ -388,6 +388,34 @@ with tab6:
         
         st.info(f"**Specific Bond Selection Alpha:** {camp_res.selection_alpha_pct:+.2f}% | Total Excess Return: {camp_res.excess_return_pct:+.2f}%")
 
+        st.markdown("---")
+        st.subheader("🏛️ GIPS Compliance & Composite Performance Disclosure")
+        st.caption("Global Investment Performance Standards verification, Modified Dietz cash flow weighting, and internal dispersion.")
+        
+        gips_eng = GipsCompositeEngine("US_INSTITUTIONAL_CORE_DISCRETIONARY_COMPOSITE")
+        sample_gips_ports = [
+            ("P_ALPHA", 15000000.0, 16800000.0, 0.120),
+            ("P_BETA", 25000000.0, 27750000.0, 0.110),
+            ("P_GAMMA", 18000000.0, 20340000.0, 0.130),
+            ("P_DELTA", 10000000.0, 11100000.0, 0.110),
+            ("P_EPSILON", 32000000.0, 35360000.0, 0.105),
+            ("P_ZETA", 14000000.0, 15610000.0, 0.115)
+        ]
+        for pid, bmv, emv, rg in sample_gips_ports:
+            gips_eng.add_portfolio_period_data(pid, bmv, emv, gross_return=rg, annual_fee_bps=65.0)
+            
+        gips_res = gips_eng.compute_composite_annual_performance(benchmark_annual_return=0.095, total_firm_assets=500000000.0)
+        p_row = gips_res["presentation"]
+        
+        gp1, gp2, gp3, gp4 = st.columns(4)
+        gp1.metric("Composite Gross Return", f"{p_row['composite_gross_return_pct']:.2f}%")
+        gp2.metric("Composite Net Return", f"{p_row['composite_net_return_pct']:.2f}%", f"{p_row['net_excess_return_pct']:+.2f}% vs Bmk")
+        gp3.metric("Internal Dispersion", f"{p_row['internal_dispersion_std_pct']}%", "Asset-Weighted Std Dev")
+        gp4.metric("Total Composite Assets", f"${p_row['composite_assets_usd']:,.0f}", f"{p_row['composite_pct_of_firm']:.1f}% of Firm")
+        
+        with st.expander("📄 View GIPS Annual Composite Schedule Table"):
+            st.dataframe(pd.DataFrame([p_row]))
+
 # ------------------ TAB 7: SCENARIO LAB & PORTFOLIO COMPARE ------------------
 with tab7:
     st.header("🧪 CFA Multi-Portfolio Comparison & Macroeconomic Stress Lab")
@@ -424,6 +452,48 @@ with tab7:
         
     st.subheader("⚡ Macroeconomic Stress Test & Crisis Simulation")
     st.table(comp_report.stress_test_comparison)
+
+    st.markdown("---")
+    st.subheader("⚖️ CFA Level III Black-Litterman Asset Allocation Optimizer")
+    st.caption("Blends neutral market equilibrium returns (reverse optimization) with subjective tactical views and confidence matrices.")
+    
+    bl_assets = ["US Large Cap Equities", "Global Developed Equities", "US 10Y Treasuries", "Emerging Market Debt"]
+    bl_cov = np.array([
+        [0.038, 0.024, 0.002, 0.009],
+        [0.024, 0.046, 0.001, 0.014],
+        [0.002, 0.001, 0.008, 0.003],
+        [0.009, 0.014, 0.003, 0.024]
+    ])
+    bl_mkt_w = np.array([0.45, 0.25, 0.20, 0.10])
+    
+    bl_eng = BlackLittermanEngine(bl_assets, bl_cov, bl_mkt_w, risk_aversion=2.5, tau=0.05)
+    
+    bc1, bc2 = st.columns(2)
+    with bc1:
+        st.markdown("**View 1: US Equities vs Global Developed Outperformance**")
+        v1_outperf = st.slider("US Equities Outperformance Spread (%)", min_value=-5.0, max_value=8.0, value=2.5, step=0.5) / 100.0
+        v1_conf = st.slider("View 1 Confidence Level", min_value=0.1, max_value=0.99, value=0.80, step=0.05)
+    with bc2:
+        st.markdown("**View 2: Absolute 10Y Treasury Return Expectation**")
+        v2_ret = st.slider("US 10Y Treasury Expected Return (%)", min_value=2.0, max_value=8.0, value=5.25, step=0.25) / 100.0
+        v2_conf = st.slider("View 2 Confidence Level", min_value=0.1, max_value=0.99, value=0.90, step=0.05)
+        
+    P_views = np.array([
+        [1.0, -1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0]
+    ])
+    Q_views = np.array([v1_outperf, v2_ret])
+    bl_results = bl_eng.blend_views(P_views, Q_views, confidences=[v1_conf, v2_conf])
+    
+    bl_df = pd.DataFrame({
+        "Asset Class": bl_assets,
+        "Benchmark Weight": [f"{w*100:.1f}%" for w in bl_results["market_benchmark_weights"]],
+        "Implied Equilibrium (Pi)": [f"{r*100:.2f}%" for r in bl_results["implied_equilibrium_returns"]],
+        "Posterior Return (mu_BL)": [f"{r*100:.2f}%" for r in bl_results["posterior_expected_returns"]],
+        "Optimal BL Weight (w*)": [f"{w*100:.1f}%" for w in bl_results["optimal_constrained_weights"]],
+        "Active Tilt": [f"{t*100:+.2f}%" for t in bl_results["active_tilts"]]
+    })
+    st.table(bl_df)
 
 # ------------------ TAB 8: FIXED INCOME LDI & IMMUNIZATION ------------------
 with tab8:
