@@ -15,6 +15,7 @@ from cfa_quant import (
     CfaValuationEngine, ForensicAccountingEngine, CapmSmlModel, IndustryBenchmarkEngine, ExcelModelExporter,
     BaseValuationModel, UnifiedValuationSuite, ThreeStageDcfValuation, ResidualIncomeValuation, DividendDiscountModelValuation, MarketMultiplesValuation,
     PortfolioRebalancingEngine, RebalancingBlotter, TradeOrder,
+    FactorRiskModelEngine, ActiveRiskDecomposition, FactorExposure,
     BlackLittermanEngine, GipsCompositeEngine, ScenarioLabEngine, MarginalAllocationEngine, PerformanceAttributionEngine, FixedIncomeLdiEngine, VolatilitySurfaceEngine,
     LifeCyclePortfolioEngine, LifeCycleClient, IpsGeneratorEngine, ClientProfile, TaxLegalOptimizationEngine, AccountBalances,
     SecurityMaster, TransactionLedger, CustodianIngestionGateway, NewsWireEngine, CentralDataHopper, MacroEngine, SecEdgarClient, MarketDataClient,
@@ -457,6 +458,35 @@ with tab6:
         with st.expander("📄 View GIPS Annual Composite Schedule Table"):
             st.dataframe(pd.DataFrame([p_row]))
 
+        st.markdown("---")
+        st.subheader("🌐 Multi-Factor Active Risk Decomposition (Fama-French / Barra)")
+        st.caption("Decomposes portfolio active risk (Tracking Error) into Systematic Factor Variances vs. Stock-Specific Idiosyncratic Risk.")
+        
+        frm_engine = FactorRiskModelEngine()
+        demo_assets = ["MSFT", "AAPL", "NVDA", "JNJ", "XOM"]
+        demo_dw = np.array([0.08, -0.05, 0.06, -0.04, -0.05])
+        demo_B = np.array([
+            [1.15, -0.20, -0.30,  0.40,  0.60, -0.10],
+            [1.10, -0.15, -0.25,  0.30,  0.55, -0.15],
+            [1.45,  0.30, -0.40,  0.85,  0.50,  0.20],
+            [0.65, -0.40,  0.45, -0.20,  0.30, -0.30],
+            [0.80, -0.10,  0.75, -0.15, -0.20,  0.40]
+        ])
+        demo_spec = np.array([0.0225, 0.0200, 0.0450, 0.0100, 0.0150])
+        factor_decomp = frm_engine.decompose_active_risk("PORTFOLIO_ALPHA", "S&P500", demo_assets, demo_dw, demo_B, demo_spec, portfolio_active_return=0.028)
+        
+        fr1, fr2, fr3, fr4 = st.columns(4)
+        fr1.metric("Total Tracking Error", f"{factor_decomp.total_tracking_error_bps:.1f} bps", f"{factor_decomp.total_tracking_error_bps/100:.2f}%/yr")
+        fr2.metric("Factor Active Risk", f"{factor_decomp.factor_active_risk_bps:.1f} bps", f"{factor_decomp.factor_risk_pct_of_variance:.1f}% Active Var")
+        fr3.metric("Specific Stock Risk", f"{factor_decomp.specific_active_risk_bps:.1f} bps", f"{factor_decomp.specific_risk_pct_of_variance:.1f}% Active Var")
+        fr4.metric("Information Ratio (IR)", f"{factor_decomp.information_ratio:.2f}", "Alpha / Tracking Error")
+        
+        with st.expander("📊 View Factor Tilt Exposures (Betas) & FLAM Metrics"):
+            st.json({
+                "factor_exposures": factor_decomp.factor_exposures,
+                "fundamental_law_metrics": factor_decomp.flam_metrics
+            })
+
 # ------------------ TAB 7: SCENARIO LAB & PORTFOLIO COMPARE ------------------
 with tab7:
     st.header("🧪 CFA Multi-Portfolio Comparison & Macroeconomic Stress Lab")
@@ -535,6 +565,45 @@ with tab7:
         "Active Tilt": [f"{t*100:+.2f}%" for t in bl_results["active_tilts"]]
     })
     st.table(bl_df)
+
+    st.markdown("---")
+    st.subheader("📑 CFA Tax-Aware Rebalancing Blotter & FIX Order Routing")
+    st.caption("Generates cost-optimized HIFO execution tickets to transition current holdings to target optimal allocations.")
+    
+    rebal_eng = PortfolioRebalancingEngine(capital_gains_tax_rate=0.238, default_corridor_band_pct=0.03)
+    curr_holdings_sample = {
+        "US Large Cap Equities": {"shares": 25000.0, "price": 240.0, "cost_basis": 180.0},
+        "Global Developed Equities": {"shares": 8000.0, "price": 480.0, "cost_basis": 500.0},
+        "US 10Y Treasuries": {"shares": 20000.0, "price": 100.0, "cost_basis": 100.0},
+        "Emerging Market Debt": {"shares": 10000.0, "price": 85.0, "cost_basis": 90.0}
+    }
+    tgt_weights_dict = dict(zip(bl_assets, bl_results["optimal_constrained_weights"]))
+    rebal_blotter = rebal_eng.construct_rebalancing_orders("ENDOWMENT_MANDATE", curr_holdings_sample, tgt_weights_dict, cash_balance=250000.0)
+    
+    rb1, rb2, rb3, rb4 = st.columns(4)
+    rb1.metric("Portfolio Assets", f"${rebal_blotter.total_portfolio_value_usd:,.0f}")
+    rb2.metric("Turnover Volume", f"${rebal_blotter.total_turnover_usd:,.0f}", f"{rebal_blotter.turnover_ratio_pct:.1f}% Turnover")
+    rb3.metric("Net Realized Gain", f"${rebal_blotter.estimated_realized_gains_usd:+,.0f}", "HIFO Lot Matching")
+    rb4.metric("Est Tax Drag", f"${rebal_blotter.estimated_tax_drag_usd:,.0f}", "23.8% Cap Gains")
+    
+    if rebal_blotter.orders:
+        orders_df = pd.DataFrame([
+            {
+                "Order ID": o.order_id,
+                "Action": o.action,
+                "Symbol": o.symbol,
+                "Shares": f"{o.shares:,.1f}",
+                "Limit Price": f"${o.limit_price:,.2f}",
+                "Notional USD": f"${o.notional_usd:,.2f}",
+                "Realized Gain/(Loss)": f"${o.estimated_realized_gain_usd:+,.2f}",
+                "FIX Tag 35": o.fix_tag_35,
+                "Custodian": o.target_custodian
+            }
+            for o in rebal_blotter.orders
+        ])
+        st.dataframe(orders_df, use_container_width=True)
+    else:
+        st.info("✓ Portfolio is within acceptable rebalancing corridor bands. Zero turnover required.")
 
 # ------------------ TAB 8: FIXED INCOME LDI & IMMUNIZATION ------------------
 with tab8:
