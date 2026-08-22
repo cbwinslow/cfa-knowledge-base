@@ -15,6 +15,7 @@ from cfa_quant import (
     CfaValuationEngine, ForensicAccountingEngine, CapmSmlModel, IndustryBenchmarkEngine, ExcelModelExporter,
     BaseValuationModel, UnifiedValuationSuite, ThreeStageDcfValuation, ResidualIncomeValuation, DividendDiscountModelValuation, MarketMultiplesValuation,
     PortfolioRebalancingEngine, RebalancingBlotter, TradeOrder,
+    WalkForwardBacktester,
     FactorRiskModelEngine, ActiveRiskDecomposition, FactorExposure,
     CoveredCallStrategy, ProtectiveCollarStrategy, BullCallSpreadStrategy, IronCondorStrategy, LongStraddleStrategy, GreeksHedgingSolver,
     BlackLittermanEngine, GipsCompositeEngine, ScenarioLabEngine, MarginalAllocationEngine, PerformanceAttributionEngine, FixedIncomeLdiEngine, VolatilitySurfaceEngine,
@@ -704,6 +705,41 @@ with tab7:
         st.dataframe(orders_df, use_container_width=True)
     else:
         st.info("✓ Portfolio is within acceptable rebalancing corridor bands. Zero turnover required.")
+
+    st.markdown("---")
+    st.subheader("⏱️ CFA Institutional Walk-Forward Backtester & Friction Simulator")
+    st.caption("Simulates multi-period dynamic corridor rebalancing vs. fixed calendar rebalancing with non-linear market impact slippage.")
+    
+    wf_bt = WalkForwardBacktester(risk_free_rate=0.045, half_spread_bps=5.0, commission_rate_bps=2.0)
+    
+    # Generate 252-day synthetic multi-asset price trajectory
+    np.random.seed(42)
+    t_days = 252
+    mu_vec = np.array([0.105, 0.080, 0.048, 0.092]) / 252.0
+    sig_vec = np.array([0.175, 0.150, 0.060, 0.120]) / np.sqrt(252.0)
+    sim_ret = np.random.normal(mu_vec, sig_vec, size=(t_days, 4))
+    sim_px = 100.0 * np.exp(np.cumsum(sim_ret, axis=0))
+    
+    bt_rep = wf_bt.run_backtest(
+        strategy_name="Black-Litterman Optimal Mandate",
+        asset_names=bl_assets,
+        price_matrix=sim_px,
+        target_weights=np.array(bl_results["optimal_constrained_weights"]),
+        initial_capital=10000000.0,
+        rebalance_corridor_pct=0.03
+    )
+    
+    bk1, bk2, bk3, bk4, bk5 = st.columns(5)
+    bk1.metric("Ending Capital", f"${bt_rep.ending_capital:,.0f}", f"{bt_rep.total_return_pct:+.2f}% Total Return")
+    bk2.metric("Annualized CAGR", f"{bt_rep.cagr_pct:.2f}%", f"Vol: {bt_rep.annualized_volatility_pct:.1f}%")
+    bk3.metric("Sharpe Ratio", f"{bt_rep.sharpe_ratio:.2f}", f"Sortino: {bt_rep.sortino_ratio:.2f}")
+    bk4.metric("Max Drawdown", f"{bt_rep.max_drawdown_pct:.2f}%", f"Calmar: {bt_rep.calmar_ratio:.2f}")
+    bk5.metric("Friction Drag", f"${bt_rep.total_friction_drag_usd:,.0f}", f"{bt_rep.total_friction_drag_bps:.1f} bps Drag")
+    
+    fig_eq = go.Figure()
+    fig_eq.add_trace(go.Scatter(y=bt_rep.equity_curve, mode='lines', name='Portfolio Value ($)', line=dict(color='#00E676', width=3)))
+    fig_eq.update_layout(title="Walk-Forward Portfolio Equity Curve ($10M Initial Capital)", xaxis_title="Trading Days", yaxis_title="Portfolio Market Value ($)", template="plotly_dark")
+    st.plotly_chart(fig_eq, use_container_width=True)
 
 # ------------------ TAB 8: FIXED INCOME LDI & IMMUNIZATION ------------------
 with tab8:
