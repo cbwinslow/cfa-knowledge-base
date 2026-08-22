@@ -14,6 +14,7 @@ from cfa_quant.opportunity_cost import OpportunityCostEngine
 from cfa_quant.stochastic_sim import MertonJumpDiffusion, MJDParameters
 from cfa_quant.options_engine import OptionsAnalyticsEngine
 from cfa_quant.charting import FinancialChartEngine
+from cfa_quant.volatility_surface import VolatilitySurfaceEngine
 from cfa_quant.ips_generator import IpsGeneratorEngine, ClientProfile
 from cfa_quant.tax_legal_engine import TaxLegalOptimizationEngine, AccountBalances
 from pipeline.sec_edgar_client import SecEdgarClient
@@ -41,9 +42,10 @@ st.sidebar.markdown("---")
 st.sidebar.caption("Grounded in CFA Level I/II/III Curriculum Standards.")
 
 # ==================== MAIN DASHBOARD TABS ====================
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
     "🏛️ Valuation & SML",
     "📈 Price Action & Zoom",
+    "🌐 3D Vol Surface",
     "🎯 Opportunity Cost & EVA",
     "👥 Peer Comps & DuPont 5-Way",
     "📝 IPS Generator (L3)",
@@ -154,8 +156,33 @@ if has_data:
         fig_candle = chart_eng.build_candlestick_figure(ticker, period="2y")
         st.plotly_chart(fig_candle, use_container_width=True)
 
-    # ------------------ TAB 3: OPPORTUNITY COST & EVA ------------------
+    # ------------------ TAB 3: 3D VOLATILITY SURFACE & SKEW ------------------
     with tab3:
+        st.header(f"🌐 {ticker} 3D Implied Volatility Surface & Volatility Smile")
+        st.caption("Continuous 3D volatility surface mesh mapped across Moneyness (K/S) and Expiration Tenor (DTE).")
+        
+        vol_eng = VolatilitySurfaceEngine(risk_free_rate=rf)
+        df_contracts = vol_eng.fetch_live_options_surface_data(ticker)
+        mesh = vol_eng.build_surface_mesh(df_contracts)
+        v_metrics = vol_eng.extract_surface_metrics(ticker, df_contracts, mesh)
+        
+        # Metric Cards
+        vm1, vm2, vm3, vm4 = st.columns(4)
+        vm1.metric("ATM IV (30-Day)", f"{v_metrics.atm_iv_30d:.1f}%")
+        vm2.metric("ATM IV (180-Day)", f"{v_metrics.atm_iv_180d:.1f}%", v_metrics.term_structure_slope)
+        vm3.metric("25-Delta Risk Reversal", f"{v_metrics.skew_25d_risk_reversal_30d:+.2f}%", "Put Skew (Crash Premium)" if v_metrics.skew_25d_risk_reversal_30d > 0 else "Call Skew")
+        vm4.metric("25-Delta Butterfly", f"{v_metrics.butterfly_25d_kurtosis_30d:+.2f}%", "Fat Tails / Kurtosis")
+        
+        # 3D Interactive Surface
+        fig_3d = vol_eng.render_3d_surface_figure(mesh, ticker, v_metrics.spot_price)
+        st.plotly_chart(fig_3d, use_container_width=True)
+        
+        # 2D Cross-Sections
+        fig_2d = vol_eng.render_2d_skew_and_term_structure(mesh, ticker)
+        st.plotly_chart(fig_2d, use_container_width=True)
+
+    # ------------------ TAB 4: OPPORTUNITY COST & EVA ------------------
+    with tab4:
         st.header("🎯 Opportunity Cost & Capital Allocation Assessment")
         opp_eng = OpportunityCostEngine(risk_free_rate=rf, equity_risk_premium=0.050)
         opp_res = opp_eng.evaluate_opportunity_cost(
@@ -179,8 +206,8 @@ if has_data:
         
         st.markdown(f"### 📋 Allocation Verdict\n> **{opp_res.opportunity_cost_verdict}**")
 
-    # ------------------ TAB 4: PEER COMPS & DUPONT 5-WAY ------------------
-    with tab4:
+    # ------------------ TAB 5: PEER COMPS & DUPONT 5-WAY ------------------
+    with tab5:
         st.header("👥 Competitor Benchmarking & DuPont 5-Way Analysis")
         bench_engine = IndustryBenchmarkEngine()
         ratios = bench_engine.compute_cfa_ratios(latest_stmt)
@@ -205,8 +232,8 @@ if has_data:
                 df_peers = pd.DataFrame(peer_comp["peer_data"])
                 st.dataframe(df_peers, use_container_width=True)
 
-# ------------------ TAB 5: IPS GENERATOR (CFA LEVEL III) ------------------
-with tab5:
+# ------------------ TAB 6: IPS GENERATOR (CFA LEVEL III) ------------------
+with tab6:
     st.header("📝 Institutional Investment Policy Statement (IPS) Generator")
     st.caption("Constructs an audit-ready, institutional IPS following CFA Level III Private Wealth standards.")
     
@@ -245,8 +272,8 @@ with tab5:
         st.markdown(ips_doc)
         st.download_button("📥 Download IPS Document (.md)", ips_doc, file_name=f"IPS_{client_name.replace(' ', '_')}.md", mime="text/markdown")
 
-# ------------------ TAB 6: TAX & LEGAL WEALTH ALPHA ------------------
-with tab6:
+# ------------------ TAB 7: TAX & LEGAL WEALTH ALPHA ------------------
+with tab7:
     st.header("⚖️ Tax-Alpha Asset Location & Cross-Border Optimization")
     
     tl_col1, tl_col2 = st.columns(2)
@@ -276,8 +303,8 @@ with tab6:
             st.metric("Annual Tax Savings", f"${arb_res['annual_tax_arbitrage_savings']:,.2f}/yr")
             st.metric("10-Year Compounded Wealth Delta", f"${arb_res['10_year_compounded_savings']:,.2f}")
 
-# ------------------ TAB 7: MACRO & YIELD CURVE ------------------
-with tab7:
+# ------------------ TAB 8: MACRO & YIELD CURVE ------------------
+with tab8:
     st.header("🌐 Macroeconomic & Yield Curve Regime Studio")
     if has_data:
         m_summary = macro_snap["macro_risk_summary"]
@@ -296,8 +323,8 @@ with tab7:
         fig_yc.update_layout(title=f"Yield Curve Regime: {macro_snap['yield_curve']['regime']}", xaxis_title="Tenor", yaxis_title="Yield (%)", template="plotly_dark")
         st.plotly_chart(fig_yc, use_container_width=True)
 
-# ------------------ TAB 8: CFA KNOWLEDGE BASE ------------------
-with tab8:
+# ------------------ TAB 9: CFA KNOWLEDGE BASE ------------------
+with tab9:
     st.header("📚 CFA Curriculum & Quantitative Research Search")
     query = st.text_input("Query CFA Knowledge Base (Formulas, LOS, Mock Exams, Research):", value="Human Capital Asset Allocation")
     if query:
