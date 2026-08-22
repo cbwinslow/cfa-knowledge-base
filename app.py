@@ -22,6 +22,7 @@ from cfa_quant.tax_legal_engine import TaxLegalOptimizationEngine, AccountBalanc
 from cfa_quant.fixed_income_ldi import FixedIncomeLdiEngine, BondAsset, LiabilityObligation
 from cfa_quant.hopper import CentralDataHopper
 from cfa_quant.scenario_lab import ScenarioLabEngine
+from cfa_quant.marginal_allocation import MarginalAllocationEngine
 from cfa_quant.instruments.portfolio import UnifiedPortfolio
 from cfa_quant.instruments.fixed_income import FixedCouponBond, InflationLinkedBond
 from cfa_quant.instruments.equity import PublicEquityStock, RealEstateAsset, PrivateEquityHolding
@@ -51,10 +52,11 @@ st.sidebar.markdown("---")
 st.sidebar.caption("Grounded in CFA Level I/II/III Curriculum Standards.")
 
 # ==================== MAIN DASHBOARD TABS ====================
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12 = st.tabs([
     "🏛️ Valuation & SML",
     "📈 Price Action & Zoom",
     "🌐 3D Vol Surface",
+    "➕ Marginal Asset Addition",
     "🧪 Scenario Lab & Compare",
     "🛡️ Fixed Income LDI",
     "🎯 Opportunity Cost & EVA",
@@ -216,12 +218,66 @@ if has_data:
         fig_2d = vol_eng.render_2d_skew_and_term_structure(mesh, ticker)
         st.plotly_chart(fig_2d, use_container_width=True)
 
-# ------------------ TAB 4: SCENARIO LAB & PORTFOLIO COMPARE ------------------
+# ------------------ TAB 4: MARGINAL ASSET ADDITION & 3D LANDSCAPE ------------------
 with tab4:
+    st.header("➕ Marginal Asset Addition & 3D Risk-Return Landscape")
+    st.caption("Simulates the before-and-after impact of adding an investment to a portfolio across return, volatility, Sharpe ratio, and MCTR risk contributions.")
+    
+    # Base Portfolio ($10M Traditional 60/40)
+    base_p = UnifiedPortfolio("Marcus Family Wealth (Base)")
+    base_p.add_instrument(PublicEquityStock("US Large Cap Equities", beta=1.0, expected_earnings_growth=0.065, historical_volatility=0.18), 6000000.0)
+    base_p.add_instrument(FixedCouponBond("Core US Aggregate Bonds", coupon_rate=0.035, maturity_years=7.0, yield_to_maturity=0.045), 4000000.0)
+    
+    col_add1, col_add2 = st.columns(2)
+    with col_add1:
+        st.subheader("📦 Select Investment Instrument to Add")
+        add_type = st.selectbox("Asset Category", ["Direct Real Estate LP", "Individual Tech Growth Equity (e.g. MSFT)", "10-Year TIPS Inflation Hedge", "Private Equity / Venture LP", "Custom Asset"])
+        add_amount = st.number_input("Dollar Allocation Amount ($)", min_value=50000.0, value=2000000.0, step=100000.0)
+        
+    with col_add2:
+        st.subheader("🔬 Asset Characteristics")
+        if add_type == "Direct Real Estate LP":
+            cand_inst = RealEstateAsset("Institutional Direct Real Estate Fund", net_operating_income=110000.0, cap_rate=0.055, expected_appreciation_rate=0.035)
+        elif add_type == "Individual Tech Growth Equity (e.g. MSFT)":
+            cand_inst = PublicEquityStock("Microsoft Corporation (MSFT)", ticker="MSFT", beta=1.1, dividend_yield=0.008, expected_earnings_growth=0.12, historical_volatility=0.23)
+        elif add_type == "10-Year TIPS Inflation Hedge":
+            cand_inst = InflationLinkedBond("10Y US TIPS (Inflation Linked)", coupon_rate=0.020, maturity_years=10.0, yield_to_maturity=0.021)
+        elif add_type == "Private Equity / Venture LP":
+            cand_inst = PrivateEquityHolding("Global Growth Equity Fund LP", target_irr=0.15)
+        else:
+            c_ret = st.number_input("Expected Return (%)", value=8.5, step=0.5) / 100.0
+            c_vol = st.number_input("Annual Volatility (%)", value=16.0, step=0.5) / 100.0
+            cand_inst = PublicEquityStock("Custom Candidate Asset", expected_earnings_growth=c_ret, historical_volatility=c_vol)
+
+        st.info(f"**Selected:** {cand_inst.name}\n- Expected Return: **{cand_inst.compute_expected_return()*100:.2f}%**\n- Volatility: **{cand_inst.compute_volatility()*100:.2f}%**\n- Duration: **{cand_inst.compute_duration():.1f} yrs**")
+
+    if st.button("🚀 Simulate Incremental Asset Addition"):
+        marg_eng = MarginalAllocationEngine()
+        sim_res, f_3d, f_bar, f_donut = marg_eng.simulate_asset_addition(base_p, cand_inst, dollar_to_add=add_amount)
+        
+        # Summary KPI Cards
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("Return Delta", f"{sim_res.delta_metrics['return_delta_bps']:+.1f} bps/yr", f"New Return: {sim_res.metrics_after['expected_annual_return_pct']:.2f}%")
+        k2.metric("Volatility Delta", f"{sim_res.delta_metrics['volatility_delta_bps']:+.1f} bps", "Lower Risk" if sim_res.delta_metrics['volatility_delta_bps'] < 0 else "Higher Risk")
+        k3.metric("Sharpe Delta", f"{sim_res.delta_metrics['sharpe_delta']:+.2f}", f"New Sharpe: {sim_res.metrics_after['sharpe_ratio']:.2f}")
+        k4.metric("Diversification Benefit", f"{sim_res.diversification_benefit_pct:.1f}%")
+        
+        st.success(f"**Recommendation Verdict:** {sim_res.recommendation_verdict}")
+        
+        # Visuals
+        st.plotly_chart(f_3d, use_container_width=True)
+        
+        v_c1, v_c2 = st.columns(2)
+        with v_c1:
+            st.plotly_chart(f_bar, use_container_width=True)
+        with v_c2:
+            st.plotly_chart(f_donut, use_container_width=True)
+
+# ------------------ TAB 5: SCENARIO LAB & PORTFOLIO COMPARE ------------------
+with tab5:
     st.header("🧪 CFA Multi-Portfolio Comparison & Macroeconomic Stress Lab")
     st.caption("Head-to-head comparison of Current vs. Proposed Portfolios and simulation of historical macro shocks.")
     
-    # Default Benchmark Portfolios
     port_curr = UnifiedPortfolio("Portfolio A (Current 60/40)")
     port_curr.add_instrument(PublicEquityStock("US Large Cap Equities", beta=1.0, expected_earnings_growth=0.065, historical_volatility=0.18), 6000000.0)
     port_curr.add_instrument(FixedCouponBond("Core Aggregate Bonds", coupon_rate=0.035, maturity_years=7.0, yield_to_maturity=0.045), 4000000.0)
@@ -236,7 +292,6 @@ with tab4:
     lab_eng = ScenarioLabEngine()
     comp_report = lab_eng.compare_portfolios(port_curr, port_prop)
     
-    # Key Summary Cards
     sc1, sc2, sc3, sc4 = st.columns(4)
     sc1.metric("Return Delta", f"{comp_report.delta_metrics['expected_return_delta_bps']:+.1f} bps/yr", "Port B vs Port A")
     sc2.metric("Volatility Delta", f"{comp_report.delta_metrics['volatility_delta_bps']:+.1f} bps", "Lower Risk" if comp_report.delta_metrics['volatility_delta_bps'] < 0 else "Higher Risk")
@@ -245,19 +300,18 @@ with tab4:
     
     st.markdown("---")
     
-    # Visual Comparison Charts
-    fig_bar, fig_radar = lab_eng.render_comparison_visuals(comp_report)
+    fig_bar_comp, fig_radar_comp = lab_eng.render_comparison_visuals(comp_report)
     vc1, vc2 = st.columns(2)
     with vc1:
-        st.plotly_chart(fig_bar, use_container_width=True)
+        st.plotly_chart(fig_bar_comp, use_container_width=True)
     with vc2:
-        st.plotly_chart(fig_radar, use_container_width=True)
+        st.plotly_chart(fig_radar_comp, use_container_width=True)
         
     st.subheader("⚡ Macroeconomic Stress Test & Crisis Simulation")
     st.table(comp_report.stress_test_comparison)
 
-# ------------------ TAB 5: FIXED INCOME LDI & IMMUNIZATION ------------------
-with tab5:
+# ------------------ TAB 6: FIXED INCOME LDI & IMMUNIZATION ------------------
+with tab6:
     st.header("🛡️ CFA Level III Fixed Income LDI & Immunization Studio")
     st.caption("Matches portfolio duration, satisfies convexity constraints, and minimizes M^2 structural dispersion.")
     
@@ -315,8 +369,8 @@ with tab5:
             })
         st.table(pd.DataFrame(shock_rows))
 
-    # ------------------ TAB 6: OPPORTUNITY COST & EVA ------------------
-    with tab6:
+    # ------------------ TAB 7: OPPORTUNITY COST & EVA ------------------
+    with tab7:
         st.header("🎯 Opportunity Cost & Capital Allocation Assessment")
         opp_eng = OpportunityCostEngine(risk_free_rate=rf, equity_risk_premium=0.050)
         opp_res = opp_eng.evaluate_opportunity_cost(
@@ -340,8 +394,8 @@ with tab5:
         
         st.markdown(f"### 📋 Allocation Verdict\n> **{opp_res.opportunity_cost_verdict}**")
 
-    # ------------------ TAB 7: PEER COMPS & DUPONT 5-WAY ------------------
-    with tab7:
+    # ------------------ TAB 8: PEER COMPS & DUPONT 5-WAY ------------------
+    with tab8:
         st.header("👥 Competitor Benchmarking & DuPont 5-Way Analysis")
         c1, c2 = st.columns([1, 1])
         with c1:
@@ -363,8 +417,8 @@ with tab5:
                 df_peers = pd.DataFrame(peer_comp["peer_data"])
                 st.dataframe(df_peers, use_container_width=True)
 
-# ------------------ TAB 8: IPS & LIFE-CYCLE GLIDEPATH (CFA LEVEL III) ------------------
-with tab8:
+# ------------------ TAB 9: IPS & LIFE-CYCLE GLIDEPATH (CFA LEVEL III) ------------------
+with tab9:
     st.header("📝 Institutional Investment Policy Statement (IPS) & Life-Cycle Glidepath")
     st.caption("Constructs an audit-ready, institutional IPS and dynamic age-based asset allocation glidepath.")
     
@@ -438,8 +492,8 @@ with tab8:
         st.markdown(ips_doc)
         st.download_button("📥 Download Full IPS Document (.md)", ips_doc, file_name=f"IPS_{client_name.replace(' ', '_')}.md", mime="text/markdown")
 
-# ------------------ TAB 9: TAX & LEGAL WEALTH ALPHA ------------------
-with tab9:
+# ------------------ TAB 10: TAX & LEGAL WEALTH ALPHA ------------------
+with tab10:
     st.header("⚖️ Tax-Alpha Asset Location & Cross-Border Optimization")
     
     tl_col1, tl_col2 = st.columns(2)
@@ -469,8 +523,8 @@ with tab9:
             st.metric("Annual Tax Savings", f"${arb_res['annual_tax_arbitrage_savings']:,.2f}/yr")
             st.metric("10-Year Compounded Wealth Delta", f"${arb_res['10_year_compounded_savings']:,.2f}")
 
-# ------------------ TAB 10: MACRO & YIELD CURVE ------------------
-with tab10:
+# ------------------ TAB 11: MACRO & YIELD CURVE ------------------
+with tab11:
     st.header("🌐 Macroeconomic & Yield Curve Regime Studio")
     if has_data:
         m_summary = macro_snap["macro_risk_summary"]
@@ -489,8 +543,8 @@ with tab10:
         fig_yc.update_layout(title=f"Yield Curve Regime: {macro_snap['yield_curve']['regime']}", xaxis_title="Tenor", yaxis_title="Yield (%)", template="plotly_dark")
         st.plotly_chart(fig_yc, use_container_width=True)
 
-# ------------------ TAB 11: CFA KNOWLEDGE BASE ------------------
-with tab11:
+# ------------------ TAB 12: CFA KNOWLEDGE BASE ------------------
+with tab12:
     st.header("📚 CFA Curriculum & Quantitative Research Search")
     query = st.text_input("Query CFA Knowledge Base (Formulas, LOS, Mock Exams, Research):", value="Human Capital Asset Allocation")
     if query:
