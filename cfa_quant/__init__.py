@@ -48,8 +48,11 @@ from cfa_quant.valuation import (
     ExcelModelExporter
 )
 
-# 3. Portfolio Construction, Asset Allocation, GIPS & Macro Risk
+# 3. Portfolio Construction, Asset Allocation, GIPS, Risk & Rebalancing
 from cfa_quant.portfolio_risk import (
+    PortfolioRebalancingEngine,
+    RebalancingBlotter,
+    TradeOrder,
     BlackLittermanEngine,
     GipsCompositeEngine,
     ScenarioLabEngine,
@@ -138,7 +141,10 @@ __all__ = [
     "CapmSmlModel",
     "IndustryBenchmarkEngine",
     "ExcelModelExporter",
-    # Portfolio Risk, Allocation & GIPS
+    # Portfolio Risk, Allocation, GIPS & Rebalancing
+    "PortfolioRebalancingEngine",
+    "RebalancingBlotter",
+    "TradeOrder",
     "BlackLittermanEngine",
     "GipsCompositeEngine",
     "ScenarioLabEngine",

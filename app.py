@@ -13,6 +13,8 @@ from cfa_quant import (
     UnifiedPortfolio, FixedCouponBond, InflationLinkedBond, MunicipalBond, MortgageBackedSecurity,
     PublicEquityStock, RealEstateAsset, PrivateEquityHolding,
     CfaValuationEngine, ForensicAccountingEngine, CapmSmlModel, IndustryBenchmarkEngine, ExcelModelExporter,
+    BaseValuationModel, UnifiedValuationSuite, ThreeStageDcfValuation, ResidualIncomeValuation, DividendDiscountModelValuation, MarketMultiplesValuation,
+    PortfolioRebalancingEngine, RebalancingBlotter, TradeOrder,
     BlackLittermanEngine, GipsCompositeEngine, ScenarioLabEngine, MarginalAllocationEngine, PerformanceAttributionEngine, FixedIncomeLdiEngine, VolatilitySurfaceEngine,
     LifeCyclePortfolioEngine, LifeCycleClient, IpsGeneratorEngine, ClientProfile, TaxLegalOptimizationEngine, AccountBalances,
     SecurityMaster, TransactionLedger, CustodianIngestionGateway, NewsWireEngine, CentralDataHopper, MacroEngine, SecEdgarClient, MarketDataClient,
@@ -181,6 +183,45 @@ if has_data:
             file_name=f"{ticker}_Valuation_Model.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+        
+        # Polymorphic Valuation Ensemble
+        val_suite = UnifiedValuationSuite([
+            ThreeStageDcfValuation(stage1_growth=growth_stage1),
+            ResidualIncomeValuation(roe_forecast=ratios.get("roe", 0.22)),
+            DividendDiscountModelValuation(dividend_growth_stage1=growth_stage1 * 0.8),
+            MarketMultiplesValuation(target_pe_multiple=26.5, target_ev_ebitda_multiple=17.5)
+        ])
+        poly_data = {
+            "free_cash_flow": cfo - capex,
+            "book_value_of_equity": book_val,
+            "dividend_per_share": max(0.50, latest_stmt.get("dividends_paid", 0) / shares) if shares > 0 else 2.50,
+            "eps_ttm": max(1.0, net_inc / shares) if shares > 0 else 10.0,
+            "ebitda": latest_stmt.get("operating_income", 1000000000.0) * 1.15,
+            "net_debt": total_debt - cash
+        }
+        poly_eval = val_suite.evaluate_all_models(ticker, poly_data, cost_of_capital=wacc_res["wacc"], shares_outstanding=shares)
+        
+        st.markdown("---")
+        st.subheader("🎯 CFA Polymorphic Equity Valuation Consensus Bridge (Football Field)")
+        st.caption("Cross-methodology intrinsic valuation triangulation comparing DCF, Residual Income, DDM, and Market Comps against spot price.")
+        
+        model_names = [m["model_name"] for m in poly_eval["model_outputs"]]
+        model_prices = [m["intrinsic_value"] for m in poly_eval["model_outputs"]]
+        
+        fig_bridge = go.Figure()
+        fig_bridge.add_trace(go.Bar(
+            y=model_names,
+            x=model_prices,
+            orientation='h',
+            marker=dict(color=['#00E676', '#2979FF', '#FFB300', '#AB47BC']),
+            text=[f"${p:,.2f}" for p in model_prices],
+            textposition='auto',
+            name="Model Intrinsic Value"
+        ))
+        fig_bridge.add_vline(x=mkt_data["current_price"], line_width=3, line_dash="dash", line_color="#FF1744", annotation_text=f"Spot Price: ${mkt_data['current_price']:,.2f}", annotation_position="top right")
+        fig_bridge.add_vline(x=poly_eval["consensus_mean_value_per_share"], line_width=3, line_dash="dot", line_color="#00E5FF", annotation_text=f"Consensus Mean: ${poly_eval['consensus_mean_value_per_share']:,.2f}", annotation_position="bottom right")
+        fig_bridge.update_layout(title=f"Intrinsic Valuation Triangulation: {ticker}", xaxis_title="Implied Equity Value Per Share ($)", yaxis_title="Polymorphic Valuation Methodology", template="plotly_dark")
+        st.plotly_chart(fig_bridge, use_container_width=True)
         
         st.markdown("---")
         c1, c2 = st.columns([1, 1])
