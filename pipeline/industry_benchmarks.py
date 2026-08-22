@@ -9,7 +9,10 @@ Calculates:
 """
 
 from typing import Dict, Any, List
-from sec_edgar_client import SecEdgarClient
+try:
+    from .sec_edgar_client import SecEdgarClient
+except ImportError:
+    from sec_edgar_client import SecEdgarClient
 
 INDUSTRY_PEER_GROUPS = {
     "Technology / Software / Cloud": ["MSFT", "AAPL", "GOOGL", "ORCL", "IBM"],
@@ -30,12 +33,9 @@ class IndustryBenchmarkEngine:
         for sector, peers in INDUSTRY_PEER_GROUPS.items():
             if ticker in peers:
                 return peers
-        return [ticker, "MSFT", "AAPL", "GOOGL", "NVDA"]  # Default broad tech baseline
+        return [ticker, "MSFT", "AAPL", "GOOGL", "NVDA"]
 
     def compute_cfa_ratios(self, stmt: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Computes the complete CFA financial ratio suite from 10-K facts.
-        """
         rev = max(stmt.get("revenue", 1), 1)
         cogs = max(stmt.get("cost_of_revenue", 1), 1)
         ebit = stmt.get("operating_income", 0)
@@ -48,36 +48,27 @@ class IndustryBenchmarkEngine:
         ar = stmt.get("accounts_receivable", 0)
         inv = stmt.get("inventory", 0)
         
-        # 1. DuPont 5-Way Decomposition
-        # ROE = (NI/EBT) * (EBT/EBIT) * (EBIT/Rev) * (Rev/Assets) * (Assets/Equity)
         tax_burden = (net_inc / max(ebit * 0.85, 1)) if ebit > 0 else 0.80
-        interest_burden = 0.95  # Standard investment grade interest burden
+        interest_burden = 0.95
         ebit_margin = ebit / rev
         asset_turnover = rev / assets
         financial_leverage = assets / equity
-        
         dupont_roe = (net_inc / equity) * 100.0
         
-        # 2. Return on Invested Capital (ROIC)
-        # NOPAT = EBIT * (1 - t)
-        # Invested Capital = Total Debt + Equity - Cash
         nopat = ebit * (1.0 - 0.21)
         invested_capital = max(total_debt + equity - cash, 1)
         roic = (nopat / invested_capital) * 100.0
         
-        # 3. Margins
         gross_profit = stmt.get("gross_profit") or (rev - cogs)
         gross_margin = (gross_profit / rev) * 100.0
         operating_margin = (ebit / rev) * 100.0
         net_margin = (net_inc / rev) * 100.0
         
-        # 4. Operating Efficiency & Cash Conversion Cycle
         dso = (ar / rev) * 365.0
         dio = (inv / cogs) * 365.0 if inv > 0 else 0.0
-        dpo = 45.0  # Normalized days payable
+        dpo = 45.0
         ccc = dso + dio - dpo
         
-        # 5. Solvency & Debt
         debt_to_equity = total_debt / equity
         net_debt = total_debt - cash
         
@@ -109,9 +100,6 @@ class IndustryBenchmarkEngine:
         }
 
     def run_competitor_comparison(self, target_ticker: str) -> Dict[str, Any]:
-        """
-        Runs cross-sectional benchmark analysis against industry competitor peer group.
-        """
         target_ticker = target_ticker.upper()
         peers = self.get_peer_group_for_ticker(target_ticker)
         
@@ -133,7 +121,6 @@ class IndustryBenchmarkEngine:
                     "ccc_days": ratios["efficiency"]["cash_conversion_cycle_days"]
                 })
                 
-        # Calculate Industry Medians
         if not peer_metrics:
             return {}
             
@@ -157,9 +144,5 @@ class IndustryBenchmarkEngine:
 
 if __name__ == "__main__":
     engine = IndustryBenchmarkEngine()
-    print("Testing CFA Ratio & Competitor Benchmarking for MSFT...")
     comp = engine.run_competitor_comparison("MSFT")
     print(f"Target: {comp['target_ticker']} | Peers: {comp['peer_group']}")
-    print("Industry Medians:")
-    for k, v in comp["industry_medians"].items():
-        print(f"  {k}: {v}")

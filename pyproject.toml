@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cfa-quant-suite"
+version = "1.0.0"
+authors = [
+  { name="C.B. Winslow" },
+]
+description = "Institutional CFA Quantitative Valuation, Macro Regime & Opportunity Cost Engine"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "yfinance>=0.2.35",
+    "pandas>=2.1.0",
+    "numpy>=1.26.0",
+    "tabulate>=0.9.0",
+    "pymupdf>=1.23.0",
+    "pypdf>=4.0.0",
+    "requests>=2.31.0",
+    "beautifulsoup4>=4.12.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["cfa_quant*", "pipeline*"]
+exclude = ["data*", "skills*", "venv*"]
