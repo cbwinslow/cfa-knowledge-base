@@ -21,6 +21,7 @@ from cfa_quant import (
     BlackLittermanEngine, GipsCompositeEngine, ScenarioLabEngine, MarginalAllocationEngine, PerformanceAttributionEngine, FixedIncomeLdiEngine, VolatilitySurfaceEngine,
     LifeCyclePortfolioEngine, LifeCycleClient, IpsGeneratorEngine, ClientProfile, TaxLegalOptimizationEngine, AccountBalances,
     SecurityMaster, TransactionLedger, CustodianIngestionGateway, NewsWireEngine, CentralDataHopper, MacroEngine, SecEdgarClient, MarketDataClient,
+    MemoGeneratorEngine,
     CfaAgentHarness, HybridRagEngine, PortfolioVisualizer, FinancialChartEngine
 )
 from scripts.query_cfa_kb import search_kb
@@ -156,24 +157,34 @@ if has_data:
 
     # Top-Level Master Institutional Export Bar
     with st.container():
-        ex_c1, ex_c2, ex_c3 = st.columns([3, 2, 2])
+        ex_c1, ex_c2, ex_c3, ex_c4 = st.columns([3, 2, 2, 2])
         with ex_c1:
             st.caption(f"🏛️ **Institutional Fiduciary Terminal** | {ticker} • {sec_data['entity_name']} | CFA 2026 Standards")
         with ex_c2:
             excel_exporter = ExcelModelExporter()
             master_xlsx_stream = excel_exporter.generate_master_institutional_workbook(f"{ticker}_INSTITUTIONAL_MANDATE")
             st.download_button(
-                label="📥 Download Master Model (.xlsx)",
+                label="📥 Master Model (.xlsx)",
                 data=master_xlsx_stream,
                 file_name=f"{ticker}_Master_Institutional_Model.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
         with ex_c3:
+            memo_eng = MemoGeneratorEngine()
+            memo_doc = memo_eng.generate_committee_memo(mandate_name=f"{ticker} Institutional Research Mandate")
+            st.download_button(
+                label="📑 Committee Memo (.md)",
+                data=memo_doc.to_markdown(),
+                file_name=f"{ticker}_Investment_Committee_Memo.md",
+                mime="text/markdown",
+                use_container_width=True
+            )
+        with ex_c4:
             analytics_store = AnalyticsStore()
             latest_rec = analytics_store.get_latest_calculation("VALUATION", ticker) or {"status": "computed_in_memory", "ticker": ticker}
             st.download_button(
-                label="📄 Export State (.json)",
+                label="📄 State (.json)",
                 data=json.dumps(latest_rec, indent=2),
                 file_name=f"{ticker}_analytics_state.json",
                 mime="application/json",

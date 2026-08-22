@@ -127,6 +127,12 @@ from cfa_quant.visual import (
     FinancialChartEngine
 )
 
+# 8. Reports & Institutional Briefing Packs
+from cfa_quant.reports import (
+    MemoGeneratorEngine,
+    InvestmentCommitteeMemo
+)
+
 __all__ = [
     "__version__",
     # Instruments & Portfolio
@@ -222,5 +228,8 @@ __all__ = [
     "HybridRagEngine",
     # Visual
     "PortfolioVisualizer",
-    "FinancialChartEngine"
+    "FinancialChartEngine",
+    # Reports & Briefing Packs
+    "MemoGeneratorEngine",
+    "InvestmentCommitteeMemo"
 ]
