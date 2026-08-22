@@ -174,7 +174,7 @@ class CfaTerminalApp:
                 console.print("[bold yellow]Exiting CFA Terminal. Goodbye Charterholder![/bold yellow]")
                 break
 
-if __name__ == "__main__":
+def main():
     app = CfaTerminalApp()
     if len(sys.argv) > 1 and sys.argv[1] == "--valuation":
         t = sys.argv[2] if len(sys.argv) > 2 else "MSFT"
@@ -183,3 +183,6 @@ if __name__ == "__main__":
         app.run_portfolio_stress_view()
     else:
         app.interactive_cli_loop()
+
+if __name__ == "__main__":
+    main()
