@@ -133,6 +133,15 @@ from cfa_quant.reports import (
     InvestmentCommitteeMemo
 )
 
+# 9. Stochastic Simulation & Regime Switching
+from cfa_quant.simulation import (
+    BaseStochasticSimulator,
+    RegimeState,
+    SimulationResult,
+    MarkovRegimeEngine,
+    MertonJumpDiffusionEngine
+)
+
 __all__ = [
     "__version__",
     # Instruments & Portfolio
@@ -231,5 +240,11 @@ __all__ = [
     "FinancialChartEngine",
     # Reports & Briefing Packs
     "MemoGeneratorEngine",
-    "InvestmentCommitteeMemo"
+    "InvestmentCommitteeMemo",
+    # Stochastic Simulation & Regime Switching
+    "BaseStochasticSimulator",
+    "RegimeState",
+    "SimulationResult",
+    "MarkovRegimeEngine",
+    "MertonJumpDiffusionEngine"
 ]
