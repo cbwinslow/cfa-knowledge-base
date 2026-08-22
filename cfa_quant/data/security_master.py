@@ -9,11 +9,12 @@ Implements a 6-tier waterfall:
 6. Market Feeds (Live Beta, Market Cap, Dividend Yield, Shares Outstanding)
 """
 
+import os
 import re
 import json
 import hashlib
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, Union
 import requests
 import duckdb
 import pandas as pd
@@ -58,8 +59,14 @@ EMBEDDED_SECURITY_LEXICON = {
 }
 
 class SecurityMaster:
-    def __init__(self, db_path: Path = DB_PATH):
-        self.db_path = db_path
+    def __init__(self, db_path: Optional[Union[Path, str]] = None):
+        if db_path is not None:
+            self.db_path = Path(db_path)
+        elif "PYTEST_CURRENT_TEST" in os.environ or "PYTEST_XDIST_WORKER" in os.environ:
+            worker = os.environ.get("PYTEST_XDIST_WORKER", f"pid_{os.getpid()}")
+            self.db_path = DB_PATH.parent / f"{DB_PATH.stem}_{worker}{DB_PATH.suffix}"
+        else:
+            self.db_path = DB_PATH
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_duckdb()
 

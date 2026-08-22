@@ -8,11 +8,12 @@ Centralized, persistent columnar store for all quantitative calculations:
 5. GIPS Composite Annual Presentations & Internal Dispersion
 """
 
+import os
 import json
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, Union
 import duckdb
 import pandas as pd
 
@@ -29,8 +30,14 @@ def safe_json_loads(val: Any, default: Any = None) -> Any:
         return default if default is not None else {}
 
 class AnalyticsStore:
-    def __init__(self, db_path: Optional[Path] = None):
-        self.db_path = Path(db_path) if db_path else DEFAULT_ANALYTICS_DB
+    def __init__(self, db_path: Optional[Union[Path, str]] = None):
+        if db_path is not None:
+            self.db_path = Path(db_path)
+        elif "PYTEST_CURRENT_TEST" in os.environ or "PYTEST_XDIST_WORKER" in os.environ:
+            worker = os.environ.get("PYTEST_XDIST_WORKER", f"pid_{os.getpid()}")
+            self.db_path = DEFAULT_ANALYTICS_DB.parent / f"{DEFAULT_ANALYTICS_DB.stem}_{worker}{DEFAULT_ANALYTICS_DB.suffix}"
+        else:
+            self.db_path = DEFAULT_ANALYTICS_DB
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_tables()
 

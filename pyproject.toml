@@ -55,3 +55,9 @@ py-modules = ["tui_app", "app"]
 [tool.setuptools.packages.find]
 include = ["cfa_quant*", "pipeline*"]
 exclude = ["data*", "skills*", "venv*"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-v -n auto --strict-markers"
+testpaths = ["tests"]
+asyncio_mode = "strict"
