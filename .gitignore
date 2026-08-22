@@ -14,6 +14,15 @@ data/downloads/
 data/processed/
 data/sec_cache/
 
+# Local Database Binaries & Excel Outputs
+data/*.duckdb*
+data/*.sqlite
+data/*.json
+*.xlsx
+.coverage
+reports/
+bin/
+
 # System / Editor files
 .DS_Store
 *.swp
