@@ -149,7 +149,16 @@ class TransactionLedger:
         
         if df_txns.empty:
             empty_port = UnifiedPortfolio(name=f"{portfolio_id} (Empty)")
-            return empty_port, {"cash_usd": 0.0, "total_value_usd": 0.0, "realized_gains_usd": 0.0, "open_lots": {}}
+            return empty_port, {
+                "portfolio_id": portfolio_id,
+                "as_of_date": as_of_date,
+                "tax_lot_strategy": tax_lot_strategy,
+                "cash_balance_usd": 0.0,
+                "total_portfolio_value_usd": 0.0,
+                "total_realized_capital_gains_usd": 0.0,
+                "num_open_positions": 0,
+                "realized_trade_records": []
+            }
 
         cash_balance = 0.0
         active_lots: Dict[str, List[TaxLot]] = {}
