@@ -9,7 +9,7 @@ Master Top-Level Package Exports
 
 __version__ = "2.0.0"
 
-# 1. Multi-Asset Instruments & Portfolio Engine
+# 1. Multi-Asset Instruments & Portfolio Engine (Polymorphic InvestmentInstrument hierarchy)
 from cfa_quant.instruments import (
     InvestmentInstrument,
     AssetClass,
@@ -32,8 +32,15 @@ from cfa_quant.instruments import (
     UnifiedPortfolio
 )
 
-# 2. Valuation & Financial Modeling
+# 2. Valuation & Financial Modeling (Polymorphic BaseValuationModel hierarchy)
 from cfa_quant.valuation import (
+    BaseValuationModel,
+    ValuationOutput,
+    ThreeStageDcfValuation,
+    ResidualIncomeValuation,
+    DividendDiscountModelValuation,
+    MarketMultiplesValuation,
+    UnifiedValuationSuite,
     CfaValuationEngine,
     ForensicAccountingEngine,
     CapmSmlModel,
@@ -118,7 +125,14 @@ __all__ = [
     "OrderBookLevel",
     "ImplementationShortfallResult",
     "UnifiedPortfolio",
-    # Valuation
+    # Polymorphic Valuation
+    "BaseValuationModel",
+    "ValuationOutput",
+    "ThreeStageDcfValuation",
+    "ResidualIncomeValuation",
+    "DividendDiscountModelValuation",
+    "MarketMultiplesValuation",
+    "UnifiedValuationSuite",
     "CfaValuationEngine",
     "ForensicAccountingEngine",
     "CapmSmlModel",
